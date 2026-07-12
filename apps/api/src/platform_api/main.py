@@ -1,11 +1,13 @@
 import os
 from typing import Any, AsyncIterator
-from fastapi import FastAPI, Response, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
-from platform_api.routers import me
+from platform_core.exceptions import PlatformError
+from platform_api.errors import platform_error_handler
+from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin
 
 # Database lifecycle state
 db_engine = None
@@ -50,6 +52,13 @@ app.add_middleware(
 )
 
 app.include_router(me.router)
+app.include_router(v1_me.router)
+app.include_router(v1_businesses.router)
+app.include_router(v1_business.router)
+app.include_router(v1_team_modules.router)
+app.include_router(v1_admin.router)
+
+app.add_exception_handler(PlatformError, platform_error_handler)
 
 
 @app.get("/health/live", status_code=status.HTTP_200_OK)
@@ -61,11 +70,12 @@ async def liveness_check() -> dict[str, Any]:
 
 
 @app.get("/health/ready")
-async def readiness_check(response: Response) -> dict[str, Any]:
+async def readiness_check(request: Request, response: Response) -> dict[str, Any]:
     """
     Readiness check to verify DB connection and required services.
     """
-    if not db_session_factory:
+    session_factory = getattr(request.app.state, "db_session_factory", None)
+    if not session_factory:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {
             "status": "error",
@@ -74,13 +84,61 @@ async def readiness_check(response: Response) -> dict[str, Any]:
         }
 
     try:
-        async with db_session_factory() as session:
+        async with session_factory() as session:
             # Perform a quick select to verify connectivity
             await session.execute(text("SELECT 1"))
         return {"status": "ok", "database": "connected"}
     except Exception as e:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return {"status": "error", "message": f"Database connectivity failed: {str(e)}"}
+
+
+@app.get("/health/worker")
+async def worker_health_check(request: Request, response: Response) -> dict[str, Any]:
+    """Worker/outbox lag health gate (Doc 12 §22.2)."""
+    session_factory = getattr(request.app.state, "db_session_factory", None)
+    if not session_factory:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {
+            "status": "error",
+            "worker": "not_configured",
+            "message": "Database is not configured",
+        }
+
+    lag_threshold_seconds = int(os.getenv("WORKER_LAG_THRESHOLD_SECONDS", "300"))
+    try:
+        async with session_factory() as session:
+            result = await session.execute(
+                text("""
+                    SELECT COALESCE(
+                        EXTRACT(EPOCH FROM (now() - MIN(created_at))),
+                        0
+                    )::int AS lag_seconds,
+                    COUNT(*) FILTER (WHERE status = 'pending') AS pending_count
+                    FROM platform_outbox_events
+                    WHERE status IN ('pending', 'processing')
+                """)
+            )
+            row = result.one()
+            lag_seconds = int(row.lag_seconds or 0)
+            pending_count = int(row.pending_count or 0)
+        if lag_seconds > lag_threshold_seconds and pending_count > 0:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {
+                "status": "error",
+                "worker": "lag_exceeded",
+                "lag_seconds": lag_seconds,
+                "pending_count": pending_count,
+            }
+        return {
+            "status": "ok",
+            "worker": "healthy",
+            "lag_seconds": lag_seconds,
+            "pending_count": pending_count,
+        }
+    except Exception as e:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {"status": "error", "message": f"Worker health check failed: {str(e)}"}
 
 
 if __name__ == "__main__":

@@ -11,12 +11,20 @@ dependencies = [
     "pyjwt>=2.13.0",
 ]
 
+[project.optional-dependencies]
+test = [
+    "platform-testing",
+]
+
 [tool.uv.sources]
 platform-core = { workspace = true }
 platform-domain-events = { workspace = true }
+platform-testing = { workspace = true }
 
 [tool.pytest.ini_options]
 pythonpath = [
-    "src"
+    "src",
+    "../../python/testing",
 ]
+asyncio_mode = "auto"
 

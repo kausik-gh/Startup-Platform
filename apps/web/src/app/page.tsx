@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { redirect } from 'next/navigation'
 import { COLORS } from '@platform/ui'
-import { createClient } from '@/lib/supabase/server'
+import { getAccessToken } from '@/lib/supabase/access-token'
 
 async function getProfile(token: string) {
   // Use absolute URL since this is SSR
@@ -27,14 +27,13 @@ async function getProfile(token: string) {
 }
 
 export default async function Page() {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const token = await getAccessToken()
 
-  if (!session) {
+  if (!token) {
     redirect('/login')
   }
 
-  const profile = await getProfile(session.access_token)
+  const profile = await getProfile(token)
 
   return (
     <div

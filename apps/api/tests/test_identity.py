@@ -6,7 +6,7 @@ import jwt
 from fastapi.testclient import TestClient
 from platform_api.main import app
 
-TEST_JWT_SECRET = "test-secret-for-stage1c-identity"
+TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
 
 def _make_token(

@@ -1,17 +1,87 @@
+import json
+from typing import Any
+
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from platform_worker.claiming import claim_outbox_batch
 
+KNOWN_HANDLERS = {"business.created", "permission.granted", "module.enabled", "module.deactivated"}
 
-async def poll_and_dispatch_outbox(session: AsyncSession, worker_id: str) -> None:
-    """
-    Polls outbox events from platform_outbox_events and dispatches them to event handlers.
-    """
+
+async def _mark_completed(session: AsyncSession, event_id: str) -> None:
+    await session.execute(
+        text("""
+            UPDATE platform_outbox_events
+            SET status = 'completed', processed_at = now(), leased_until = NULL, leased_by = NULL
+            WHERE id = :id
+        """),
+        {"id": event_id},
+    )
+
+
+async def _mark_retry(session: AsyncSession, event_id: str, attempt_count: int, error: str) -> None:
+    backoff = min(2**attempt_count * 30, 3600)
+    await session.execute(
+        text("""
+            UPDATE platform_outbox_events
+            SET status = 'failed',
+                attempt_count = :attempt_count,
+                next_attempt_at = now() + make_interval(secs => :backoff),
+                last_error = :error,
+                leased_until = NULL,
+                leased_by = NULL
+            WHERE id = :id
+        """),
+        {"id": event_id, "attempt_count": attempt_count, "backoff": backoff, "error": error},
+    )
+
+
+async def _mark_dead_letter(session: AsyncSession, event: dict[str, Any], error: str) -> None:
+    await session.execute(
+        text("""
+            UPDATE platform_outbox_events SET status = 'dead_letter', last_error = :error WHERE id = :id
+        """),
+        {"id": event["id"], "error": error},
+    )
+    payload = event["payload"]
+    if isinstance(payload, dict):
+        payload = json.dumps(payload)
+    await session.execute(
+        text("""
+            INSERT INTO platform_dead_letter_events
+                (source_table, source_id, event_type, payload, final_error, attempt_count)
+            VALUES ('platform_outbox_events', :id, :event_type, CAST(:payload AS jsonb), :error, :attempt_count)
+        """),
+        {
+            "id": event["id"],
+            "event_type": event["event_type"],
+            "payload": payload,
+            "error": error,
+            "attempt_count": event["attempt_count"],
+        },
+    )
+
+
+async def poll_and_dispatch_outbox(session: AsyncSession, worker_id: str) -> int:
     events = await claim_outbox_batch(session, worker_id)
     if not events:
-        return
+        return 0
 
-    print(f"[Outbox] Claimed {len(events)} events to process.")
+    processed = 0
     for event in events:
-        # Under Stage 1A, we only log the claim. Handlers will be defined in later stages.
-        print(f"[Outbox] Processing event: {event.get('id')} of type: {event.get('event_type')}")
-        # In a full run: await dispatch_event_to_handlers(event, session)
+        event_type = event.get("event_type", "")
+        try:
+            if event_type not in KNOWN_HANDLERS:
+                raise ValueError(f"No handler for event type: {event_type}")
+            await _mark_completed(session, str(event["id"]))
+            processed += 1
+        except Exception as exc:
+            attempt = int(event.get("attempt_count", 0)) + 1
+            max_attempts = int(event.get("max_attempts", 5))
+            if attempt >= max_attempts:
+                await _mark_dead_letter(session, event, str(exc))
+            else:
+                await _mark_retry(session, str(event["id"]), attempt, str(exc))
+    await session.commit()
+    return processed
