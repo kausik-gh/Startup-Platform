@@ -5,15 +5,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
+from platform_api.routers import me
 
 # Database lifecycle state
 db_engine = None
 db_session_factory = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
     global db_engine, db_session_factory
-    
+
     if os.getenv("DATABASE_URL"):
         try:
             db_engine, db_session_factory = create_worker_session_factory()
@@ -21,11 +23,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
             print(f"Warning: Failed to initialize db session factory: {e}")
             db_engine = None
             db_session_factory = None
-    
+
+    app.state.db_session_factory = db_session_factory
+
     yield
-    
+
     if db_engine:
         await db_engine.dispose()
+
 
 app = FastAPI(
     title="Multi-Tenant Platform API",
@@ -43,6 +48,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(me.router)
 
 
 @app.get("/health/live", status_code=status.HTTP_200_OK)

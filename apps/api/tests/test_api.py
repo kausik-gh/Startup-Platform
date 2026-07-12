@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 from platform_api.main import app
 from typing import Any
 
+
 def test_liveness_check() -> None:
     with TestClient(app) as client:
         response = client.get("/health/live")
@@ -12,7 +13,7 @@ def test_liveness_check() -> None:
 def test_readiness_check_unconfigured(monkeypatch: Any) -> None:
     # Ensure DATABASE_URL is not set
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    
+
     with TestClient(app) as client:
         response = client.get("/health/ready")
         assert response.status_code == 503

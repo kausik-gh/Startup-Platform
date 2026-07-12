@@ -1,7 +1,12 @@
 import os
 from typing import Tuple, AsyncGenerator
 from contextlib import asynccontextmanager
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession, AsyncEngine
+from sqlalchemy.ext.asyncio import (
+    create_async_engine,
+    async_sessionmaker,
+    AsyncSession,
+    AsyncEngine,
+)
 
 
 def get_database_url() -> str | None:
@@ -9,7 +14,9 @@ def get_database_url() -> str | None:
     return os.getenv("DATABASE_URL")
 
 
-def create_worker_session_factory(role: str = "service") -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
+def create_worker_session_factory(
+    role: str = "service",
+) -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """
     Creates an async engine and session factory.
     role: "service" (RLS bypassed, e.g. for worker processes) or "user" (RLS active)
@@ -37,9 +44,11 @@ def create_worker_session_factory(role: str = "service") -> Tuple[AsyncEngine, a
 
 
 @asynccontextmanager
-async def transactional_session(session_factory: async_sessionmaker[AsyncSession]) -> AsyncGenerator[AsyncSession, None]:
+async def transactional_session(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncGenerator[AsyncSession, None]:
     """
-    Foundational transaction helper for operations that require atomic commits 
+    Foundational transaction helper for operations that require atomic commits
     (e.g., domain mutation + outbox event insert).
     """
     async with session_factory() as session:

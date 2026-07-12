@@ -1,7 +1,41 @@
 import React from 'react'
-import { COLORS } from '@platform/ui'
+export const dynamic = 'force-dynamic'
 
-export default function Page() {
+import { redirect } from 'next/navigation'
+import { COLORS } from '@platform/ui'
+import { createClient } from '@/lib/supabase/server'
+
+async function getProfile(token: string) {
+  // Use absolute URL since this is SSR
+  // In a real app we'd get the API URL from environment
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
+  
+  const res = await fetch(`${apiUrl}/me`, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  })
+  
+  if (!res.ok) {
+    if (res.status === 401) {
+      return null
+    }
+    throw new Error('Failed to fetch profile')
+  }
+  
+  return res.json()
+}
+
+export default async function Page() {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session) {
+    redirect('/login')
+  }
+
+  const profile = await getProfile(session.access_token)
+
   return (
     <div
       style={{
@@ -38,23 +72,38 @@ export default function Page() {
             WebkitTextFillColor: 'transparent',
           }}
         >
-          Multi-Tenant Platform
+          Identity Foundation
         </h1>
-        <p style={{ color: COLORS.secondary, fontSize: '1.1rem', marginBottom: '2rem' }}>
-          Production-grade multi-tenant platform monorepo foundation bootstrapped.
-        </p>
-        <div
-          style={{
-            display: 'inline-block',
-            padding: '0.75rem 1.5rem',
-            borderRadius: '8px',
-            backgroundColor: COLORS.accent,
-            color: '#fff',
-            fontWeight: 600,
-          }}
-        >
-          apps/web (Active)
-        </div>
+        
+        {profile ? (
+          <div style={{ textAlign: 'left', marginBottom: '2rem', backgroundColor: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
+            <p><strong>ID:</strong> {profile.id}</p>
+            <p><strong>Email:</strong> {profile.email}</p>
+            <p><strong>Display Name:</strong> {profile.display_name}</p>
+          </div>
+        ) : (
+          <p style={{ color: COLORS.secondary, fontSize: '1.1rem', marginBottom: '2rem' }}>
+            Loading profile...
+          </p>
+        )}
+
+        <form action="/auth/logout" method="post">
+          <button
+            type="submit"
+            style={{
+              display: 'inline-block',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '8px',
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            Logout
+          </button>
+        </form>
       </div>
     </div>
   )

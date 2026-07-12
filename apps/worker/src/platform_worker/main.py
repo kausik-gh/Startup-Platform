@@ -10,6 +10,7 @@ from typing import Any
 # Global flag for graceful shutdown
 running = True
 
+
 def handle_shutdown_signal(sig: int, frame: Any) -> None:
     global running
     print(f"\nReceived signal {sig}. Initiating graceful shutdown...")
@@ -38,18 +39,18 @@ async def main() -> None:
 
     try:
         engine, session_factory = create_worker_session_factory(role="service")
-        
+
         # Verify connectivity
         async with session_factory() as session:
             await session.execute(text("SELECT 1"))
-            
+
         print("Worker successfully connected to the database.")
     except Exception as e:
         print(f"CRITICAL: Failed to initialize worker database session: {e}")
         sys.exit(1)
 
     print("Worker foundation ready. Waiting for Stage 1 slices for job execution...")
-    
+
     # Wait until shutdown signal
     while running:
         await asyncio.sleep(1)
