@@ -1,15 +1,38 @@
 import os
-from typing import Any
+from typing import Any, AsyncIterator
 from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
+
+# Database lifecycle state
+db_engine = None
+db_session_factory = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
+    global db_engine, db_session_factory
+    
+    if os.getenv("DATABASE_URL"):
+        try:
+            db_engine, db_session_factory = create_worker_session_factory()
+        except Exception as e:
+            print(f"Warning: Failed to initialize db session factory: {e}")
+            db_engine = None
+            db_session_factory = None
+    
+    yield
+    
+    if db_engine:
+        await db_engine.dispose()
 
 app = FastAPI(
     title="Multi-Tenant Platform API",
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Standard CORS Middleware setup
@@ -20,15 +43,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Database Session Factory for readiness checks
-db_session_factory = None
-if os.getenv("DATABASE_URL"):
-    try:
-        db_session_factory = create_worker_session_factory()
-    except Exception as e:
-        print(f"Warning: Failed to initialize db session factory: {e}")
 
 
 @app.get("/health/live", status_code=status.HTTP_200_OK)

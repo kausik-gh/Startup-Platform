@@ -4,15 +4,11 @@ import socket
 import signal
 import sys
 from platform_core.db import create_worker_session_factory
-from platform_worker.outbox_consumer import poll_and_dispatch_outbox
-from platform_worker.job_runner import poll_and_execute_jobs
-from platform_worker.scheduler import materialize_due_schedules
-
+from sqlalchemy import text
 from typing import Any
 
 # Global flag for graceful shutdown
 running = True
-
 
 def handle_shutdown_signal(sig: int, frame: Any) -> None:
     global running
@@ -36,41 +32,30 @@ async def main() -> None:
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
     print(f"Starting platform worker: {worker_id}")
 
-    # Database connection pooling setup (optional fallback if DB not configured)
-    session_factory = None
-    if os.getenv("DATABASE_URL"):
-        try:
-            session_factory = create_worker_session_factory(role="service")
-            print("Worker connected to database pool.")
-        except Exception as e:
-            print(f"Warning: Failed to initialize worker database session: {e}")
+    if not os.getenv("DATABASE_URL"):
+        print("CRITICAL: DATABASE_URL is not configured. Worker cannot start.")
+        sys.exit(1)
 
-    poll_interval = int(os.getenv("WORKER_POLL_INTERVAL_SECONDS", "2"))
-    print(f"Worker running. Polling interval: {poll_interval}s")
+    try:
+        engine, session_factory = create_worker_session_factory(role="service")
+        
+        # Verify connectivity
+        async with session_factory() as session:
+            await session.execute(text("SELECT 1"))
+            
+        print("Worker successfully connected to the database.")
+    except Exception as e:
+        print(f"CRITICAL: Failed to initialize worker database session: {e}")
+        sys.exit(1)
 
+    print("Worker foundation ready. Waiting for Stage 1 slices for job execution...")
+    
+    # Wait until shutdown signal
     while running:
-        if session_factory:
-            try:
-                async with session_factory() as session:
-                    # Run claiming and processing concurrently
-                    await asyncio.gather(
-                        poll_and_dispatch_outbox(session, worker_id),
-                        poll_and_execute_jobs(session, worker_id),
-                        materialize_due_schedules(session, worker_id),
-                    )
-            except Exception as e:
-                print(f"Error during poll execution: {e}")
-        else:
-            # Simulated execution loop for bootstrap/CI environment when DB is not running
-            print("[Simulation] Worker polling outbox, async jobs, and scheduler...")
-            await asyncio.sleep(0.1)  # Small sleep to prevent tight loop in testing
+        await asyncio.sleep(1)
 
-        # Sleep in increments to check for the 'running' flag quickly
-        for _ in range(poll_interval * 10):
-            if not running:
-                break
-            await asyncio.sleep(0.1)
-
+    print("Disposing database engine...")
+    await engine.dispose()
     print("Worker shut down cleanly.")
 
 
