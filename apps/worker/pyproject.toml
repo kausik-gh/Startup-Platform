@@ -1,0 +1,19 @@
+[project]
+name = "platform-worker"
+version = "0.1.0"
+description = "PostgreSQL-Backed Asynchronous Job and Outbox Event Worker"
+requires-python = ">=3.12"
+dependencies = [
+    "platform-core",
+    "platform-domain-events",
+]
+
+[tool.uv.sources]
+platform-core = { workspace = true }
+platform-domain-events = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src"
+]
+

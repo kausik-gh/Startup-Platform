@@ -1,0 +1,26 @@
+{
+  "name": "platform-root",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,js,jsx}\" \"packages/**/*.{ts,tsx,js,jsx}\"",
+    "python:lint": "uv run ruff check .",
+    "python:format": "uv run ruff format .",
+    "python:typecheck": "uv run mypy --explicit-package-bases .",
+    "python:test": "uv run pytest apps/api && uv run pytest apps/worker",
+    "test": "turbo run test && pnpm python:test",
+    "verify": "pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm python:lint && pnpm python:typecheck"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.2.0",
+    "@typescript-eslint/parser": "^7.2.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "turbo": "^2.0.4"
+  },
+  "packageManager": "pnpm@9.1.0"
+}
