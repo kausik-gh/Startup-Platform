@@ -353,6 +353,22 @@ class BusinessService:
             after_state={"settings": settings},
         )
 
+        # core-website: provision shell + enqueue draft generation (never blocks on AI).
+        # Doc 08 §6.4 / Doc 11 §17.2 / Doc 12 §12.1
+        from platform_core.services.website import WebsiteService
+        from platform_core.services.website_generation import WebsiteGenerationService
+
+        await WebsiteService.provision_for_business(
+            session, business_id=business.id, actor_id=identity_id
+        )
+        await WebsiteGenerationService.enqueue_generation(
+            session,
+            business_id=business.id,
+            actor_id=identity_id,
+            correlation_id=correlation_id,
+            auto=True,
+        )
+
         # Bind session for subsequent work in the same request transaction.
         await session.execute(
             text("SELECT set_config('app.current_identity_id', :iid, true)"),

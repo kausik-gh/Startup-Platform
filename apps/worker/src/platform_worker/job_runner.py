@@ -51,12 +51,27 @@ async def _record_processed(session: AsyncSession, job_id: str, handler: str) ->
     )
 
 
-async def _execute_job(job: dict[str, Any]) -> None:
-    """Stage 1 foundation handler: acknowledge work; no Stage 2 domain side effects."""
+async def _execute_job(session: AsyncSession, job: dict[str, Any]) -> None:
+    """Dispatch known job types; unknown types acknowledge without side effects."""
     payload = _payload_as_dict(job.get("payload"))
     if payload.get("__force_fail"):
         message = str(payload.get("__force_fail_message") or "forced job failure")
         raise RuntimeError(message)
+
+    job_type = str(job.get("job_type") or "")
+    if job_type == "website.generate":
+        from uuid import UUID
+
+        from platform_core.services.website_generation import WebsiteGenerationService
+
+        generation_job_id = payload.get("generation_job_id")
+        if not generation_job_id:
+            raise RuntimeError("website.generate payload missing generation_job_id")
+        await WebsiteGenerationService.execute_job(
+            session,
+            generation_job_id=UUID(str(generation_job_id)),
+            correlation_id=str(payload.get("correlation_id") or job.get("id")),
+        )
 
 
 async def _mark_completed(session: AsyncSession, job_id: str) -> None:
@@ -152,7 +167,7 @@ async def poll_and_execute_jobs(session: AsyncSession, worker_id: str) -> int:
                 processed += 1
                 continue
 
-            await _execute_job(dict(job))
+            await _execute_job(session, dict(job))
             await _record_processed(session, job_id, handler)
             await _mark_completed(session, job_id)
             processed += 1

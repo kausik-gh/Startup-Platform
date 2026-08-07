@@ -1,60 +1,24 @@
-import React from 'react'
-import { COLORS } from '@platform/ui'
+import Link from 'next/link'
 
-export default function Page() {
+export default function WorkspaceIndexPage() {
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
         minHeight: '100vh',
-        fontFamily: 'system-ui, sans-serif',
-        backgroundColor: COLORS.primary,
-        color: COLORS.background,
+        display: 'grid',
+        placeItems: 'center',
+        fontFamily: 'Georgia, serif',
+        background: 'linear-gradient(160deg, #f7f3eb 0%, #e8eef2 100%)',
         padding: '2rem',
       }}
     >
-      <div
-        style={{
-          maxWidth: '600px',
-          textAlign: 'center',
-          background: 'rgba(255, 255, 255, 0.05)',
-          padding: '3rem',
-          borderRadius: '16px',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-        }}
-      >
-        <h1
-          style={{
-            fontSize: '2.5rem',
-            marginBottom: '1rem',
-            fontWeight: 800,
-            background: 'linear-gradient(to right, #10B981, #3B82F6)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          Business Workspace
-        </h1>
-        <p style={{ color: COLORS.secondary, fontSize: '1.1rem', marginBottom: '2rem' }}>
-          Welcome to your multi-tenant operating workspace. Configure modules and settings here.
+      <div style={{ maxWidth: '32rem', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>Business Workspace</h1>
+        <p style={{ lineHeight: 1.5, marginBottom: '1.25rem' }}>
+          Open a Business context at <code>/b/&#123;businessId&#125;</code> for Home, Profile, and
+          Website management (CORE-001–CORE-007).
         </p>
-        <div
-          style={{
-            display: 'inline-block',
-            padding: '0.75rem 1.5rem',
-            borderRadius: '8px',
-            backgroundColor: '#10B981',
-            color: '#fff',
-            fontWeight: 600,
-          }}
-        >
-          apps/workspace (Active)
-        </div>
+        <Link href="/login">Sign in to continue</Link>
       </div>
     </div>
   )

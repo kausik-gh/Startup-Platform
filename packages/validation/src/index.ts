@@ -55,3 +55,31 @@ export const businessCreationSchema = z.object({
 })
 
 export type BusinessCreationInput = z.infer<typeof businessCreationSchema>
+
+/** Stage 2 website section content (structured only — no HTML). */
+export const websiteHeroContentSchema = z.object({
+  headline: z.string().trim().min(1).max(120),
+  subheadline: z.string().trim().max(300).optional(),
+  cta_label: z.string().trim().max(60).optional(),
+  cta_url: z
+    .string()
+    .trim()
+    .max(200)
+    .regex(/^(\/|mailto:|tel:)/, 'Must be a relative path or mailto/tel')
+    .optional(),
+  image_asset_id: uuidSchema.optional(),
+})
+
+export const websiteThemeSchema = z.object({
+  primary_color: z.string().trim().max(32).optional(),
+  accent_color: z.string().trim().max(32).optional(),
+  font_style: z.string().trim().max(64).optional(),
+  density: z.string().trim().max(64).optional(),
+})
+
+export const websiteNavigationItemSchema = z.object({
+  label: z.string().trim().min(1).max(80),
+  path: z.string().trim().min(1).max(200),
+})
+
+export type WebsiteHeroContent = z.infer<typeof websiteHeroContentSchema>
