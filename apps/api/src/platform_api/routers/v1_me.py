@@ -28,6 +28,9 @@ class ContextResponse(BaseModel):
     permissions: list[str]
     entitled_modules: list[str]
     module_states: dict[str, str]
+    default_business_id: str | None = None
+    last_business_id: str | None = None
+    primary_business_id: str | None = None
 
 
 @router.get("")
@@ -49,7 +52,11 @@ async def get_me_v1(
 
 
 @router.get("/context")
-async def get_context(ctx: RequestContext = Depends(get_request_context)) -> dict[str, Any]:
+async def get_context(
+    ctx: RequestContext = Depends(get_request_context),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    prefs = await IdentityService.get_consumer_preferences(session, ctx.identity_id)
     return {
         "data": ContextResponse(
             identity_id=str(ctx.identity_id),
@@ -60,6 +67,9 @@ async def get_context(ctx: RequestContext = Depends(get_request_context)) -> dic
             permissions=sorted(ctx.effective_permissions),
             entitled_modules=sorted(ctx.effective_entitlements.modules),
             module_states={k: v.activation_state for k, v in ctx.module_states.items()},
+            default_business_id=prefs.get("default_business_id"),
+            last_business_id=prefs.get("last_business_id"),
+            primary_business_id=prefs.get("primary_business_id"),
         ).model_dump(),
         "meta": {"correlation_id": ctx.correlation_id},
     }

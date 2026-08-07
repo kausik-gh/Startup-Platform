@@ -20,6 +20,23 @@ class AuthenticationRequired(PlatformError):
         super().__init__(status.HTTP_401_UNAUTHORIZED, "AUTHENTICATION_REQUIRED", message)
 
 
+class ValidationError(PlatformError):
+    def __init__(self, message: str = "Validation failed", details: dict[str, Any] | None = None):
+        # Doc 12 §10.6 maps validation failures to HTTP 422 VALIDATION_ERROR.
+        status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+        super().__init__(
+            status_code,
+            "VALIDATION_ERROR",
+            message,
+            details,
+        )
+
+
+class ConflictError(PlatformError):
+    def __init__(self, message: str, details: dict[str, Any] | None = None):
+        super().__init__(status.HTTP_409_CONFLICT, "CONFLICT", message, details)
+
+
 class SessionExpired(PlatformError):
     def __init__(self, message: str = "Session expired"):
         super().__init__(status.HTTP_401_UNAUTHORIZED, "SESSION_EXPIRED", message)

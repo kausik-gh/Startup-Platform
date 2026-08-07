@@ -36,7 +36,7 @@ async def test_outbox_worker_processes_event(db_session: AsyncSession) -> None:
     await IdentityService.bootstrap_identity(
         db_session, identity_id, f"worker-{identity_id.hex[:8]}@test.local"
     )
-    business, _, _ = await BusinessService.create_business(
+    business, _, _, _ = await BusinessService.create_business(
         db_session,
         identity_id=identity_id,
         display_name=f"Worker Test {identity_id.hex[:8]}",

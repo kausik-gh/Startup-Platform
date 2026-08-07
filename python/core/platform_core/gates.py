@@ -15,6 +15,9 @@ BUSINESS_MUTABLE_STATES: frozenset[str] = frozenset(
     {"draft", "onboarding", "active", "dormant"}
 )
 
+# Switching into a Business uses the same operable lifecycle set (not closed).
+BUSINESS_SWITCHABLE_STATES: frozenset[str] = BUSINESS_MUTABLE_STATES
+
 
 def assert_resource_allows(
     *,
@@ -41,4 +44,14 @@ def assert_business_mutable(state: str, *, action: str = "update") -> None:
         current_state=state,
         allowed_states=BUSINESS_MUTABLE_STATES,
         action=action,
+    )
+
+
+def assert_business_switchable(state: str) -> None:
+    """Resource gate for entering/switching Business context."""
+    assert_resource_allows(
+        resource="business",
+        current_state=state,
+        allowed_states=BUSINESS_SWITCHABLE_STATES,
+        action="switch",
     )

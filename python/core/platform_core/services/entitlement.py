@@ -5,28 +5,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.context import EntitlementSet
-from platform_core.models import BusinessModuleState, CommercialEntitlement
-from platform_core.permissions import PLATFORM_CORE_MODULE_IDS
+from platform_core.entitlements.resolver import BusinessEntitlementResolver
+from platform_core.models import BusinessModuleState
 from platform_core.services.audit import AuditService
 
 
 class EntitlementService:
     @staticmethod
     async def get_effective(session: AsyncSession, business_id: uuid.UUID) -> EntitlementSet:
-        now = datetime.now(timezone.utc)
-        result = await session.execute(
-            select(CommercialEntitlement).where(
-                CommercialEntitlement.business_id == business_id,
-                CommercialEntitlement.status == "active",
-                CommercialEntitlement.subject_type == "module",
-            )
-        )
-        modules: set[str] = set(PLATFORM_CORE_MODULE_IDS)
-        for ent in result.scalars().all():
-            if ent.expires_at and ent.expires_at < now:
-                continue
-            modules.add(ent.subject_id)
-        return EntitlementSet(modules=frozenset(modules))
+        resolved = await BusinessEntitlementResolver.resolve(session, business_id)
+        return BusinessEntitlementResolver.to_entitlement_set(resolved)
 
 
 class ModuleService:

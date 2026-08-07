@@ -35,7 +35,7 @@ async def test_business_creation_emits_outbox_event(db_session: AsyncSession) ->
     await IdentityService.bootstrap_identity(
         db_session, identity_id, f"{identity_id.hex[:8]}@test.local"
     )
-    business, _, _ = await BusinessService.create_business(
+    business, _, _, _ = await BusinessService.create_business(
         db_session,
         identity_id=identity_id,
         display_name=f"Outbox Test {identity_id.hex[:8]}",
@@ -62,7 +62,7 @@ async def test_outbox_event_persisted_with_business_creation(db_session: AsyncSe
     await IdentityService.bootstrap_identity(
         db_session, identity_id, f"outbox-{identity_id.hex[:8]}@test.local"
     )
-    business, _, _ = await BusinessService.create_business(
+    business, _, _, _ = await BusinessService.create_business(
         db_session,
         identity_id=identity_id,
         display_name=f"Outbox Persist {identity_id.hex[:8]}",
@@ -89,13 +89,13 @@ async def test_direct_db_business_isolation(db_session: AsyncSession) -> None:
     await ensure_auth_user(db_session, id_b, f"b-{id_b.hex[:6]}@test.local")
     await IdentityService.bootstrap_identity(db_session, id_a, f"a-{id_a.hex[:6]}@test.local")
     await IdentityService.bootstrap_identity(db_session, id_b, f"b-{id_b.hex[:6]}@test.local")
-    biz_a, _, _ = await BusinessService.create_business(
+    biz_a, _, _, _ = await BusinessService.create_business(
         db_session,
         identity_id=id_a,
         display_name=f"Iso A {id_a.hex[:6]}",
         correlation_id=str(uuid.uuid4()),
     )
-    biz_b, _, _ = await BusinessService.create_business(
+    biz_b, _, _, _ = await BusinessService.create_business(
         db_session,
         identity_id=id_b,
         display_name=f"Iso B {id_b.hex[:6]}",

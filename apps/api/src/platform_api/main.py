@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
 from platform_core.exceptions import PlatformError
 from platform_api.errors import platform_error_handler
-from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin
+from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments
 
 # Database lifecycle state
 db_engine = None
@@ -54,6 +54,21 @@ app.add_middleware(
 app.include_router(me.router)
 app.include_router(v1_me.router)
 app.include_router(v1_businesses.router)
+app.include_router(v1_platform_members.router)
+app.include_router(v1_platform_invitations.router)
+app.include_router(v1_platform_settings.router)
+app.include_router(v1_platform_configuration.router)
+app.include_router(v1_platform_entitlements.router)
+app.include_router(v1_platform_permissions.router)
+app.include_router(v1_platform_locations.router)
+app.include_router(v1_platform_employees.router)
+app.include_router(v1_platform_customers.router)
+app.include_router(v1_platform_offerings.router)
+app.include_router(v1_platform_inventory.router)
+app.include_router(v1_platform_orders.router)
+app.include_router(v1_platform_bookings.router)
+app.include_router(v1_platform_payments.router)
+app.include_router(webhooks_payments.router)
 app.include_router(v1_business.router)
 app.include_router(v1_team_modules.router)
 app.include_router(v1_admin.router)

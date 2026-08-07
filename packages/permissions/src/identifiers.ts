@@ -26,6 +26,18 @@ export const PERMISSIONS = {
   SETTINGS_READ: 'settings.read',
   SETTINGS_UPDATE: 'settings.update',
 
+  // Platform Core: Business-Type Configuration
+  CONFIGURATION_READ: 'configuration.read',
+  CONFIGURATION_UPDATE: 'configuration.update',
+
+  // Platform Core: Entitlements
+  ENTITLEMENTS_READ: 'entitlements.read',
+  ENTITLEMENTS_UPDATE: 'entitlements.update',
+
+  // Platform Core: Permissions
+  PERMISSIONS_READ: 'permissions.read',
+  PERMISSIONS_UPDATE: 'permissions.update',
+
   // Platform Core: Website
   WEBSITE_READ: 'website.read',
   WEBSITE_EDIT: 'website.edit',

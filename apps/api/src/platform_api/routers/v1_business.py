@@ -113,7 +113,7 @@ async def create_location(
 ) -> dict[str, Any]:
     if ctx.business_id != business_id:
         raise ResourceNotFound("Business")
-    location = await LocationService.create_location(
+    location = await LocationService.create_location_simple(
         session,
         business_id=business_id,
         name=body.name,

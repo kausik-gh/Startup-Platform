@@ -19,6 +19,15 @@ TEAM_MANAGE_TEMPLATES = "team.manage_templates"
 SETTINGS_READ = "settings.read"
 SETTINGS_UPDATE = "settings.update"
 
+CONFIGURATION_READ = "configuration.read"
+CONFIGURATION_UPDATE = "configuration.update"
+
+ENTITLEMENTS_READ = "entitlements.read"
+ENTITLEMENTS_UPDATE = "entitlements.update"
+
+PERMISSIONS_READ = "permissions.read"
+PERMISSIONS_UPDATE = "permissions.update"
+
 WEBSITE_READ = "website.read"
 WEBSITE_EDIT = "website.edit"
 WEBSITE_PUBLISH = "website.publish"

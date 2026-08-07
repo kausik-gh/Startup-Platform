@@ -15,11 +15,25 @@ from platform_core.exceptions import (
     LocationAccessDenied,
     MembershipRequired,
     ResourceNotFound,
+    ValidationError,
 )
+from platform_core.models import PlatformIdentity
 from platform_core.services.business import BusinessService
 from platform_core.services.entitlement import EntitlementService, ModuleService
 from platform_core.services.identity import IdentityService
 from platform_core.services.team import TeamService
+
+
+def _parse_optional_uuid(value: str | None, *, field: str) -> uuid.UUID | None:
+    if value is None or value == "":
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError as exc:
+        raise ValidationError(
+            f"Invalid UUID for {field}",
+            details={"errors": [{"field": field, "message": f"Malformed UUID: {value}"}]},
+        ) from exc
 
 
 def _parse_business_context(
@@ -32,25 +46,21 @@ def _parse_business_context(
 
     business_id_str = request.path_params.get("business_id")
     if business_id_str:
-        try:
-            business_id = uuid.UUID(str(business_id_str))
-            location_id_str = request.headers.get("X-Location-Id")
-            location_id = uuid.UUID(location_id_str) if location_id_str else None
-            return OperatingContext.BUSINESS, business_id, location_id
-        except ValueError:
-            pass
+        business_id = _parse_optional_uuid(str(business_id_str), field="business_id")
+        location_id = _parse_optional_uuid(
+            request.headers.get("X-Location-Id"), field="X-Location-Id"
+        )
+        return OperatingContext.BUSINESS, business_id, location_id
 
     ctx_header = request.headers.get("X-Operating-Context", "personal").lower()
-    business_id_str = request.headers.get("X-Business-Id")
-    location_id_str = request.headers.get("X-Location-Id")
+    header_business_id = request.headers.get("X-Business-Id")
+    header_location_id = request.headers.get("X-Location-Id")
 
-    if ctx_header == "business" and business_id_str:
-        try:
-            business_id = uuid.UUID(business_id_str)
-            location_id = uuid.UUID(location_id_str) if location_id_str else None
-            return OperatingContext.BUSINESS, business_id, location_id
-        except ValueError:
-            pass
+    if ctx_header == "business":
+        resolved_business_id = _parse_optional_uuid(header_business_id, field="X-Business-Id")
+        resolved_location_id = _parse_optional_uuid(header_location_id, field="X-Location-Id")
+        # business_id may be filled from default/last later
+        return OperatingContext.BUSINESS, resolved_business_id, resolved_location_id
     if ctx_header == "admin":
         return OperatingContext.ADMIN, None, None
     return OperatingContext.PERSONAL, None, None
@@ -72,6 +82,32 @@ async def bind_session_context(
         )
 
 
+def _empty_personal_context(
+    *,
+    identity: PlatformIdentity,
+    supabase_user_id: uuid.UUID,
+    email: str,
+    is_super_admin: bool,
+    correlation_id: str | None,
+    request: Request,
+) -> RequestContext:
+    return RequestContext(
+        identity_id=identity.id,
+        supabase_user_id=supabase_user_id,
+        email=email,
+        display_name=identity.display_name,
+        active_context=OperatingContext.PERSONAL,
+        business_id=None,
+        location_id=None,
+        membership=None,
+        effective_permissions=frozenset(),
+        effective_entitlements=EntitlementSet(),
+        module_states={},
+        is_super_admin=is_super_admin,
+        correlation_id=correlation_id or request.headers.get("X-Correlation-Id") or str(uuid4()),
+    )
+
+
 async def resolve_request_context(
     request: Request,
     session: AsyncSession,
@@ -90,17 +126,70 @@ async def resolve_request_context(
     module_states: dict[str, ModuleStateInfo] = {}
 
     is_super_admin = await IdentityService.is_super_admin(session, identity.id)
+    explicit_business_header = request.headers.get("X-Business-Id") is not None
+    path_business = request.path_params.get("business_id") is not None
+    restored_preference = False
+
+    if active_context == OperatingContext.BUSINESS and business_id is None:
+        # Stage 2B restore: default → last → no business context (do not guess).
+        remembered = await IdentityService.get_remembered_business_id(session, identity.id)
+        if remembered is not None:
+            business_id = remembered
+            restored_preference = True
+        else:
+            await bind_session_context(session, identity.id, None)
+            return _empty_personal_context(
+                identity=identity,
+                supabase_user_id=supabase_user_id,
+                email=email,
+                is_super_admin=is_super_admin,
+                correlation_id=correlation_id,
+                request=request,
+            )
 
     if active_context == OperatingContext.BUSINESS:
         if business_id is None:
             raise MembershipRequired()
         business = await BusinessService.get_by_id(session, business_id)
         if not business:
-            raise ResourceNotFound("Business")
+            if path_business or explicit_business_header:
+                raise ResourceNotFound("Business")
+            await bind_session_context(session, identity.id, None)
+            return _empty_personal_context(
+                identity=identity,
+                supabase_user_id=supabase_user_id,
+                email=email,
+                is_super_admin=is_super_admin,
+                correlation_id=correlation_id,
+                request=request,
+            )
 
-        membership = await TeamService.get_active_membership(session, identity.id, business_id)
-        if not membership:
-            raise MembershipRequired()
+        membership = await TeamService.get_membership(session, identity.id, business_id)
+        if membership is None or membership.status != "active":
+            if path_business or explicit_business_header:
+                raise MembershipRequired()
+            # Restored preference no longer valid → no business context.
+            await bind_session_context(session, identity.id, None)
+            return _empty_personal_context(
+                identity=identity,
+                supabase_user_id=supabase_user_id,
+                email=email,
+                is_super_admin=is_super_admin,
+                correlation_id=correlation_id,
+                request=request,
+            )
+
+        # Restored closed default/last → no business context (do not guess another).
+        if restored_preference and business.state == "closed":
+            await bind_session_context(session, identity.id, None)
+            return _empty_personal_context(
+                identity=identity,
+                supabase_user_id=supabase_user_id,
+                email=email,
+                is_super_admin=is_super_admin,
+                correlation_id=correlation_id,
+                request=request,
+            )
 
         membership_info = TeamService.to_membership_info(membership)
         if location_id and not membership_info.allows_location(location_id):

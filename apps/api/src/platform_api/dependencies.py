@@ -1,6 +1,7 @@
 import os
 import uuid
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Depends, Header, HTTPException, Request
@@ -17,13 +18,61 @@ from platform_core.exceptions import (
     MembershipRequired,
     ModuleNotActive,
     PermissionDenied,
+    ResourceNotFound,
     SessionExpired,
 )
+from platform_core.models import Business, BusinessMembership
+from platform_core.services.business import BusinessService
+from platform_core.services.team import TeamService
 
 
 security = HTTPBearer(auto_error=False)
 
 ContextDependency = Callable[..., Coroutine[Any, Any, RequestContext]]
+
+
+@dataclass(frozen=True)
+class BusinessActorContext:
+    request: RequestContext
+    business: Business
+    actor_membership: BusinessMembership
+
+
+async def resolve_business_actor(
+    business_id: uuid.UUID,
+    permission: str,
+    ctx: RequestContext,
+    session: AsyncSession,
+) -> BusinessActorContext:
+    """Resolve active membership and permission against a path business_id."""
+    from platform_core.authorization.resolver import AuthorizationService
+
+    business = await BusinessService.get_by_id(session, business_id)
+    if not business:
+        raise ResourceNotFound("Business")
+    membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
+    if membership is None:
+        raise MembershipRequired()
+    decision = await AuthorizationService.authorize(
+        session,
+        business_id=business_id,
+        identity_id=ctx.identity_id,
+        permission=permission,
+    )
+    if not decision.allowed:
+        raise PermissionDenied(permission)
+    return BusinessActorContext(request=ctx, business=business, actor_membership=membership)
+
+
+def require_business_actor(permission: str) -> Callable[..., Coroutine[Any, Any, BusinessActorContext]]:
+    async def check(
+        business_id: uuid.UUID,
+        ctx: RequestContext = Depends(get_request_context),
+        session: AsyncSession = Depends(get_db_session),
+    ) -> BusinessActorContext:
+        return await resolve_business_actor(business_id, permission, ctx, session)
+
+    return check
 
 
 async def verify_jwt_payload(

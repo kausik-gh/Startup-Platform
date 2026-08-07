@@ -1,0 +1,252 @@
+"""Platform payments APIs (Stage 9)."""
+
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from platform_api.db import get_db_session
+from platform_api.dependencies import BusinessActorContext, require_business_actor
+from platform_core.authorization.resolver import AuthorizationService
+from platform_core.exceptions import PermissionDenied
+from platform_core.permissions import (
+    BOOKINGS_UPDATE,
+    ORDERS_UPDATE_STATUS,
+    PAYMENTS_EXPORT,
+    PAYMENTS_MANAGE_CONNECTION,
+    PAYMENTS_READ,
+    PAYMENTS_REFUND,
+)
+from platform_core.resolvers.payment_resolver import PaymentResolver
+from platform_core.services.merchant import MerchantService
+from platform_core.services.payment_attempt import PaymentAttemptService
+from platform_core.services.refund import RefundService
+
+router = APIRouter(prefix="/v1/platform/businesses", tags=["payments"])
+
+
+class VersionedBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int | None = Field(default=None, ge=1)
+
+
+class CreatePaymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_type: str
+    source_id: UUID
+    amount: float = Field(gt=0)
+    currency: str = "INR"
+    payment_method: str = "online"
+    customer_contact_id: UUID | None = None
+    idempotency_key: str | None = None
+
+
+class RefundPaymentRequest(VersionedBody):
+    amount: float = Field(gt=0)
+    reason: str
+
+
+class MerchantConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = "stub"
+    status: str = "pending"
+    provider_metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+async def _require_payment_create_permission(
+    actor: BusinessActorContext,
+    session: AsyncSession,
+    source_type: str,
+) -> None:
+    permission = ORDERS_UPDATE_STATUS if source_type == "order" else BOOKINGS_UPDATE
+    decision = await AuthorizationService.authorize(
+        session,
+        business_id=actor.business.id,
+        identity_id=actor.request.identity_id,
+        permission=permission,
+    )
+    if not decision.allowed:
+        raise PermissionDenied(permission)
+
+
+@router.get("/{business_id}/payments")
+async def list_payments(
+    business_id: UUID,
+    status: str | None = Query(default=None),
+    source_type: str | None = Query(default=None),
+    source_id: UUID | None = Query(default=None),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    payments = await PaymentAttemptService.list_for_business(
+        session,
+        business_id,
+        status=status,
+        source_type=source_type,
+        source_id=source_id,
+    )
+    return {
+        "data": [PaymentAttemptService.serialize(p) for p in payments],
+        "meta": {"correlation_id": actor.request.correlation_id, "count": len(payments)},
+    }
+
+
+@router.get("/{business_id}/payments/export")
+async def export_payments(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_EXPORT)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    rows = await PaymentAttemptService.export_payments(session, business_id)
+    return {
+        "data": rows,
+        "meta": {"correlation_id": actor.request.correlation_id, "count": len(rows)},
+    }
+
+
+@router.get("/{business_id}/payments/merchant-connection")
+async def get_merchant_connection(
+    business_id: UUID,
+    provider: str = Query(default="stub"),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    connection = await MerchantService.get_connection(
+        session, business_id=business_id, provider=provider
+    )
+    return {
+        "data": MerchantService.serialize(connection) if connection else None,
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.put("/{business_id}/payments/merchant-connection")
+async def upsert_merchant_connection(
+    business_id: UUID,
+    body: MerchantConnectionRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_MANAGE_CONNECTION)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    connection = await MerchantService.upsert_connection(
+        session,
+        business_id=business_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+        payload=body.model_dump(),
+    )
+    await session.commit()
+    return {
+        "data": MerchantService.serialize(connection),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.post("/{business_id}/payments")
+async def create_payment(
+    business_id: UUID,
+    body: CreatePaymentRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    await _require_payment_create_permission(actor, session, body.source_type)
+    payment = await PaymentAttemptService.create_attempt(
+        session,
+        business_id=business_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+        payload=body.model_dump(),
+    )
+    await session.commit()
+    return {
+        "data": PaymentAttemptService.serialize(payment),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.get("/{business_id}/payments/{payment_id}")
+async def get_payment(
+    business_id: UUID,
+    payment_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    payment = await PaymentResolver.resolve_attempt(
+        session, business_id=business_id, payment_id=payment_id
+    )
+    return {
+        "data": PaymentAttemptService.serialize(payment),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.post("/{business_id}/payments/{payment_id}/record-settlement")
+async def record_offline_settlement(
+    business_id: UUID,
+    payment_id: UUID,
+    body: VersionedBody,
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    payment = await PaymentAttemptService.record_offline_settlement(
+        session,
+        business_id=business_id,
+        payment_id=payment_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+        expected_version=body.version,
+    )
+    await session.commit()
+    return {
+        "data": PaymentAttemptService.serialize(payment),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.post("/{business_id}/payments/{payment_id}/refunds")
+async def create_refund(
+    business_id: UUID,
+    payment_id: UUID,
+    body: RefundPaymentRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_REFUND)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    refund, payment = await RefundService.create_refund(
+        session,
+        business_id=business_id,
+        payment_id=payment_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+        payload={"amount": body.amount, "reason": body.reason},
+        expected_version=body.version,
+    )
+    await session.commit()
+    return {
+        "data": {
+            "refund": RefundService.serialize(refund),
+            "payment": PaymentAttemptService.serialize(payment),
+        },
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.get("/{business_id}/payments/{payment_id}/refunds")
+async def list_refunds(
+    business_id: UUID,
+    payment_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    refunds = await RefundService.list_for_payment(
+        session, business_id=business_id, payment_id=payment_id
+    )
+    return {
+        "data": [RefundService.serialize(r) for r in refunds],
+        "meta": {"correlation_id": actor.request.correlation_id, "count": len(refunds)},
+    }

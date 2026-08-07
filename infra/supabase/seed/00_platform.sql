@@ -23,3 +23,80 @@ INSERT INTO module_definitions (id, name, module_class, description, dependencie
 ('fulfilment', 'Fulfilment', 'optional', 'Delivery and pickup', '{orders,inventory}'),
 ('workforce', 'Workforce', 'optional', 'Staff and provider management', '{core-team-access}')
 ON CONFLICT (id) DO NOTHING;
+
+-- Website section types — canonical structured sections (Doc 12 §11.1, §18.2)
+-- These are the building blocks for structured Website content.
+-- content_schema is a simplified JSON Schema for the section's content JSONB field.
+-- No arbitrary HTML or executable code may be stored in section content.
+INSERT INTO website_section_types (id, label, description, content_schema, allowed_variants, contributing_module, sort_order) VALUES
+
+-- Core sections (available to all businesses)
+('hero', 'Hero / Banner', 'Main header section with headline, subheadline, and call-to-action',
+ '{"type":"object","required":["headline"],"properties":{"headline":{"type":"string","maxLength":120},"subheadline":{"type":"string","maxLength":300},"cta_label":{"type":"string","maxLength":60},"cta_url":{"type":"string","maxLength":500},"image_asset_id":{"type":"string","format":"uuid"}}}',
+ ARRAY['centered', 'left_aligned', 'image_left', 'image_right', 'full_width'],
+ NULL, 10),
+
+('about', 'About / Story', 'Business description, history, and mission',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"body":{"type":"string","maxLength":2000},"image_asset_id":{"type":"string","format":"uuid"}}}',
+ ARRAY['text_only', 'image_left', 'image_right'],
+ NULL, 20),
+
+('contact', 'Contact Information', 'Contact details, address, and enquiry prompt',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"address":{"type":"string","maxLength":500},"phone":{"type":"string","maxLength":50},"email":{"type":"string","maxLength":200},"hours_summary":{"type":"string","maxLength":500},"show_map":{"type":"boolean"}}}',
+ ARRAY['full', 'compact'],
+ NULL, 30),
+
+('text_block', 'Text Block', 'Freeform structured text content block',
+ '{"type":"object","required":["body"],"properties":{"title":{"type":"string","maxLength":120},"body":{"type":"string","maxLength":5000}}}',
+ ARRAY['default', 'highlighted'],
+ NULL, 40),
+
+('location_list', 'Locations', 'List of business locations with contact information',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"show_hours":{"type":"boolean"},"show_map":{"type":"boolean"}}}',
+ ARRAY['cards', 'list'],
+ NULL, 50),
+
+('gallery', 'Photo Gallery', 'Collection of images showcasing the business',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"image_asset_ids":{"type":"array","items":{"type":"string","format":"uuid"},"maxItems":20}}}',
+ ARRAY['grid', 'masonry', 'carousel'],
+ NULL, 60),
+
+-- Module-contributed sections (offerings-catalog)
+('offerings_list', 'Offerings / Products / Services', 'Display business offerings with prices',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"subtitle":{"type":"string","maxLength":300},"offering_types":{"type":"array","items":{"type":"string"}},"max_items":{"type":"integer","minimum":1,"maximum":50}}}',
+ ARRAY['cards', 'list', 'grid'],
+ 'offerings-catalog', 70),
+
+('menu_section', 'Menu', 'Food/beverage menu display',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"show_prices":{"type":"boolean"},"category_filter":{"type":"array","items":{"type":"string"}}}}',
+ ARRAY['categorized', 'simple'],
+ 'offerings-catalog', 80),
+
+('rooms_section', 'Rooms / Accommodation', 'Accommodation unit listing',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"subtitle":{"type":"string","maxLength":300}}}',
+ ARRAY['cards', 'list'],
+ 'offerings-catalog', 90),
+
+('plans_section', 'Membership Plans', 'Membership or subscription plan display',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"subtitle":{"type":"string","maxLength":300},"highlight_plan_id":{"type":"string","format":"uuid"}}}',
+ ARRAY['cards', 'comparison'],
+ 'offerings-catalog', 100),
+
+('classes_section', 'Classes / Schedule', 'Scheduled classes or sessions',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"show_upcoming_only":{"type":"boolean"},"max_items":{"type":"integer","minimum":1,"maximum":20}}}',
+ ARRAY['schedule', 'cards'],
+ 'offerings-catalog', 110),
+
+-- Call-to-action / enquiry sections
+('cta_band', 'Call to Action', 'Prominent call-to-action strip',
+ '{"type":"object","required":["headline","cta_label"],"properties":{"headline":{"type":"string","maxLength":200},"body":{"type":"string","maxLength":500},"cta_label":{"type":"string","maxLength":60},"cta_url":{"type":"string","maxLength":500}}}',
+ ARRAY['centered', 'left_aligned'],
+ NULL, 120),
+
+('enquiry_form', 'Enquiry / Lead Capture', 'Contact/enquiry form for lead capture',
+ '{"type":"object","properties":{"title":{"type":"string","maxLength":120},"subtitle":{"type":"string","maxLength":300},"offering_id":{"type":"string","format":"uuid"}}}',
+ ARRAY['default', 'compact'],
+ 'leads', 130)
+
+ON CONFLICT (id) DO NOTHING;
+

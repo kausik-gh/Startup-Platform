@@ -164,8 +164,9 @@ def test_location_scoped_member_denied_for_unauthorized_location(client: TestCli
         json={"display_name": "Location Scope Shop"},
         headers=owner_headers,
     )
+    assert create_resp.status_code == 200, create_resp.text
     business_id = create_resp.json()["data"]["business"]["id"]
-    primary_location_id = create_resp.json()["data"]["primary_location_id"]
+    primary_location_id = create_resp.json()["data"]["business"]["primary_location"]["id"]
 
     second_loc = client.post(
         f"/v1/b/{business_id}/locations",

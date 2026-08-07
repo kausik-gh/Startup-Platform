@@ -1,5 +1,5 @@
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,14 @@ class IdentityService:
     ) -> Optional[PlatformIdentity]:
         result = await session.execute(
             select(PlatformIdentity).where(PlatformIdentity.id == identity_id)
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_by_email(session: AsyncSession, email: str) -> Optional[PlatformIdentity]:
+        normalized = email.strip().lower()
+        result = await session.execute(
+            select(PlatformIdentity).where(PlatformIdentity.email.ilike(normalized))
         )
         return result.scalars().first()
 
@@ -78,6 +86,102 @@ class IdentityService:
             )
         )
         return result.scalars().first() is not None
+
+    @staticmethod
+    async def get_consumer_preferences(
+        session: AsyncSession, identity_id: uuid.UUID
+    ) -> dict[str, Any]:
+        result = await session.execute(
+            select(ConsumerProfile).where(ConsumerProfile.identity_id == identity_id)
+        )
+        profile = result.scalars().first()
+        if profile is None:
+            return {}
+        return dict(profile.preferences or {})
+
+    @staticmethod
+    async def _ensure_consumer_profile(
+        session: AsyncSession, identity_id: uuid.UUID
+    ) -> ConsumerProfile:
+        result = await session.execute(
+            select(ConsumerProfile).where(ConsumerProfile.identity_id == identity_id)
+        )
+        profile = result.scalars().first()
+        if profile is None:
+            profile = ConsumerProfile(identity_id=identity_id, preferences={})
+            session.add(profile)
+            await session.flush()
+        return profile
+
+    @staticmethod
+    def _parse_pref_uuid(prefs: dict[str, Any], key: str) -> uuid.UUID | None:
+        value = prefs.get(key)
+        if not value:
+            return None
+        try:
+            return uuid.UUID(str(value))
+        except ValueError:
+            return None
+
+    @staticmethod
+    async def get_default_business_id(
+        session: AsyncSession, identity_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        prefs = await IdentityService.get_consumer_preferences(session, identity_id)
+        return IdentityService._parse_pref_uuid(prefs, "default_business_id")
+
+    @staticmethod
+    async def get_last_business_id(
+        session: AsyncSession, identity_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        prefs = await IdentityService.get_consumer_preferences(session, identity_id)
+        return IdentityService._parse_pref_uuid(prefs, "last_business_id")
+
+    @staticmethod
+    async def get_primary_business_id(
+        session: AsyncSession, identity_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        prefs = await IdentityService.get_consumer_preferences(session, identity_id)
+        return IdentityService._parse_pref_uuid(prefs, "primary_business_id")
+
+    @staticmethod
+    async def get_remembered_business_id(
+        session: AsyncSession, identity_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        """Restore order for Business context: default → last → none (Doc 05 / Stage 2B)."""
+        default_id = await IdentityService.get_default_business_id(session, identity_id)
+        if default_id is not None:
+            return default_id
+        return await IdentityService.get_last_business_id(session, identity_id)
+
+    @staticmethod
+    async def update_business_context_preferences(
+        session: AsyncSession,
+        *,
+        identity_id: uuid.UUID,
+        last_business_id: uuid.UUID | None = None,
+        default_business_id: uuid.UUID | None = None,
+        set_primary_if_absent: bool = False,
+        primary_business_id: uuid.UUID | None = None,
+    ) -> dict[str, Any]:
+        """
+        Update remembered Business preferences.
+
+        primary_business_id is immutable once set unless set_primary_if_absent
+        and no primary exists yet (first Business creation).
+        """
+        profile = await IdentityService._ensure_consumer_profile(session, identity_id)
+        prefs = dict(profile.preferences or {})
+        if last_business_id is not None:
+            prefs["last_business_id"] = str(last_business_id)
+        if default_business_id is not None:
+            prefs["default_business_id"] = str(default_business_id)
+        if set_primary_if_absent and primary_business_id is not None:
+            if not prefs.get("primary_business_id"):
+                prefs["primary_business_id"] = str(primary_business_id)
+        profile.preferences = prefs
+        await session.flush()
+        return prefs
 
     # Legacy aliases for Stage 1C /me routes
     get_profile_by_auth_user_id = get_by_supabase_id
