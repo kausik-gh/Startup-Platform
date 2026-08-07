@@ -25,8 +25,6 @@ from platform_core.entitlements.module_registry import ModuleRegistry
 from platform_core.entitlements.plan_registry import DEFAULT_PLAN_ID, PlanRegistry
 from platform_core.exceptions import ResourceNotFound
 from platform_core.models import Business, BusinessModuleState, CommercialEntitlement
-from platform_core.services.business import BusinessService
-from platform_core.services.business_configuration import BusinessConfigurationResolver
 
 
 class BusinessEntitlementResolver:
@@ -102,6 +100,8 @@ class BusinessEntitlementResolver:
         db_grants: list[CommercialEntitlement],
         activation_rows: dict[str, BusinessModuleState],
     ) -> ResolvedEntitlement:
+        from platform_core.services.business_configuration import BusinessConfigurationResolver
+
         configuration = BusinessConfigurationResolver.resolve_from_business(business)
         business_type = business.business_type or DEFAULT_BUSINESS_TYPE
         plan = PlanRegistry.get_or_default(BusinessEntitlementResolver.plan_id_for_business(business))
@@ -241,6 +241,9 @@ class BusinessEntitlementResolver:
 
     @staticmethod
     async def resolve(session: AsyncSession, business_id: uuid.UUID) -> ResolvedEntitlement:
+        # Lazy import: BusinessService → entitlement → this module.
+        from platform_core.services.business import BusinessService
+
         business = await BusinessService.get_by_id(session, business_id)
         if business is None:
             raise ResourceNotFound("Business")

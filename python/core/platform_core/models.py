@@ -3,7 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, Numeric, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB, UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import ARRAY, INET, JSONB, TSVECTOR, UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -242,6 +242,73 @@ class WebsiteGenerationJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MarketplaceBusinessProjection(Base):
+    __tablename__ = "marketplace_business_projections"
+
+    business_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("businesses.id"), primary_key=True
+    )
+    slug: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    business_type: Mapped[str | None] = mapped_column(Text, nullable=True)
+    characteristics: Mapped[list[Any]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default=text("'{}'")
+    )
+    primary_category: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list[Any]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    primary_location_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    is_discoverable: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    logo_asset_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    website_status: Mapped[str | None] = mapped_column(Text, nullable=True)
+    capability_flags: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    search_vector: Mapped[Any | None] = mapped_column(TSVECTOR, nullable=True)
+
+
+class MarketplaceOfferingProjection(Base):
+    __tablename__ = "marketplace_offering_projections"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    business_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("businesses.id"))
+    offering_type: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    price_from: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    currency: Mapped[str | None] = mapped_column(Text, nullable=True)
+    category: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list[Any]] = mapped_column(ARRAY(Text), nullable=False, server_default=text("'{}'"))
+    location_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(PG_UUID(as_uuid=True)), nullable=False, server_default=text("'{}'")
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    indexed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    search_vector: Mapped[Any | None] = mapped_column(TSVECTOR, nullable=True)
+
+
+class MarketplaceIndexHealth(Base):
+    __tablename__ = "marketplace_index_health"
+
+    business_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("businesses.id"), primary_key=True
+    )
+    last_indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'never'"))
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    discoverability_consented_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    consented_by: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class BusinessLocation(Base):

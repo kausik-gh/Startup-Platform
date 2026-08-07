@@ -389,7 +389,15 @@ class BusinessSettingsService:
             raise ValidationError("No preference fields to update")
 
         changed = False
+        visibility_changed_to: str | None = None
         if "visibility" in validated and business.visibility != validated["visibility"]:
+            # Discoverable requires explicit Marketplace opt-in consent (Doc 11 §13.3).
+            if validated["visibility"] == "discoverable":
+                raise ValidationError(
+                    "Use Marketplace opt-in consent to become discoverable",
+                    details={"use": "POST /v1/b/{business_id}/marketplace/opt-in"},
+                )
+            visibility_changed_to = validated["visibility"]
             business.visibility = validated["visibility"]
             changed = True
 
@@ -428,4 +436,29 @@ class BusinessSettingsService:
             before_state=before,
             after_state=after,
         )
+        if visibility_changed_to is not None:
+            await OutboxService.publish(
+                session,
+                event_type="business.visibility.changed",
+                payload={
+                    "business_id": str(business.id),
+                    "before": before.get("visibility"),
+                    "after": visibility_changed_to,
+                    "consented": False,
+                },
+                business_id=business.id,
+                correlation_id=correlation_id,
+            )
+            await AuditService.record(
+                session,
+                event_type="business.visibility.changed",
+                actor_identity_id=actor_id,
+                actor_context="business",
+                business_id=business.id,
+                resource_type="business",
+                resource_id=business.id,
+                action="visibility_changed",
+                before_state={"visibility": before.get("visibility")},
+                after_state={"visibility": visibility_changed_to},
+            )
         return after

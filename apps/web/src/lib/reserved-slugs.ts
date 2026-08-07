@@ -21,6 +21,7 @@ export const RESERVED_SLUGS = new Set([
   'b',
   'public',
   'login',
+  'marketplace',
   'sitemap.xml',
   'robots.txt',
 ])

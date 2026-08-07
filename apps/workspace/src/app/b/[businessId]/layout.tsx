@@ -9,6 +9,7 @@ const NAV = [
   { href: '/website/pages', label: 'Pages', id: 'CORE-005' },
   { href: '/website/theme', label: 'Theme', id: 'CORE-006' },
   { href: '/website/publish', label: 'Preview & Publish', id: 'CORE-007' },
+  { href: '/marketplace', label: 'Marketplace', id: 'CORE-MP' },
 ]
 
 export default function WorkspaceBusinessLayout({

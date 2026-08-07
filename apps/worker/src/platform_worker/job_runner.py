@@ -72,6 +72,28 @@ async def _execute_job(session: AsyncSession, job: dict[str, Any]) -> None:
             generation_job_id=UUID(str(generation_job_id)),
             correlation_id=str(payload.get("correlation_id") or job.get("id")),
         )
+    elif job_type == "marketplace.reconcile":
+        from platform_core.services.marketplace_indexing import MarketplaceIndexingService
+
+        await MarketplaceIndexingService.reconcile_all(
+            session,
+            correlation_id=str(payload.get("correlation_id") or job.get("id")),
+            limit=int(payload.get("limit") or 100),
+        )
+    elif job_type == "marketplace.reindex":
+        from uuid import UUID
+
+        from platform_core.services.marketplace_indexing import MarketplaceIndexingService
+
+        business_id = payload.get("business_id")
+        if not business_id:
+            raise RuntimeError("marketplace.reindex payload missing business_id")
+        await MarketplaceIndexingService.reindex_business(
+            session,
+            business_id=UUID(str(business_id)),
+            correlation_id=str(payload.get("correlation_id") or job.get("id")),
+            trigger="async_job",
+        )
 
 
 async def _mark_completed(session: AsyncSession, job_id: str) -> None:

@@ -95,11 +95,32 @@ KNOWN_HANDLERS = {
     "website.draft_generated",
     "website.published",
     "website.generation_failed",
+    "business.visibility.changed",
+    "business.suspended",
+    "marketplace.indexed",
+    "marketplace.index_failed",
+    "marketplace.deindexed",
+    "marketplace.reindex_triggered",
     "business.initialized",
     "business.context_switched",
     "permission.granted",
     "module.enabled",
     "module.deactivated",
+}
+
+# Events that trigger Marketplace projection re-index (Doc 12 §14.5).
+MARKETPLACE_INDEX_TRIGGERS = {
+    "website.published",
+    "business.profile.updated",
+    "business.visibility.changed",
+    "business.suspended",
+    "offering.created",
+    "offering.updated",
+    "offering.archived",
+    "offering.restored",
+    "location.updated",
+    "location.created",
+    "location.archived",
 }
 
 
@@ -157,6 +178,25 @@ async def _mark_dead_letter(session: AsyncSession, event: dict[str, Any], error:
     )
 
 
+async def _dispatch_marketplace_index(session: AsyncSession, event: dict[str, Any]) -> None:
+    from uuid import UUID
+
+    from platform_core.services.marketplace_indexing import MarketplaceIndexingService
+
+    payload = event.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    business_id = payload.get("business_id") or event.get("business_id")
+    if not business_id:
+        return
+    await MarketplaceIndexingService.reindex_business(
+        session,
+        business_id=UUID(str(business_id)),
+        correlation_id=str(event.get("correlation_id") or event.get("id")),
+        trigger=str(event.get("event_type") or "outbox"),
+    )
+
+
 async def poll_and_dispatch_outbox(session: AsyncSession, worker_id: str) -> int:
     events = await claim_outbox_batch(session, worker_id)
     if not events:
@@ -168,6 +208,8 @@ async def poll_and_dispatch_outbox(session: AsyncSession, worker_id: str) -> int
         try:
             if event_type not in KNOWN_HANDLERS:
                 raise ValueError(f"No handler for event type: {event_type}")
+            if event_type in MARKETPLACE_INDEX_TRIGGERS:
+                await _dispatch_marketplace_index(session, dict(event))
             await _mark_completed(session, str(event["id"]))
             processed += 1
         except Exception as exc:
