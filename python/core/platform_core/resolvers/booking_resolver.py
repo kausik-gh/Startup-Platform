@@ -80,7 +80,7 @@ class BookingResolver:
                 str(booking.customer_contact_id) if booking.customer_contact_id else None
             ),
             "offering_id": str(booking.offering_id) if booking.offering_id else None,
-            "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "provider_id": str(booking.provider_id) if booking.provider_id else None,
             "booking_number": booking.booking_number,
             "reservation_mode": booking.reservation_mode,
             "status": booking.status,
@@ -92,6 +92,8 @@ class BookingResolver:
             "capacity": booking.capacity,
             "payment_method": booking.payment_method,
             "payment_status": booking.payment_status,
+            "deposit_required": booking.deposit_required,
+            "deposit_amount": float(booking.deposit_amount or 0),
             "internal_reference": booking.internal_reference,
             "cancellation_reason": booking.cancellation_reason,
             "version": booking.version,

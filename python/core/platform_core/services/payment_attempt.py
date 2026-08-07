@@ -77,7 +77,16 @@ class PaymentAttemptService:
                 session, business_id=payment.business_id, booking_id=payment.source_id
             )
             if payment.status == "succeeded":
-                booking.payment_status = "paid"
+                # Deposit attempts mark deposit_paid; full/remaining mark paid.
+                meta = payment.provider_metadata or {}
+                if meta.get("purpose") == "deposit" or (
+                    booking.deposit_required
+                    and float(payment.amount) <= float(booking.deposit_amount or 0)
+                    and booking.payment_status != "paid"
+                ):
+                    booking.payment_status = "deposit_paid"
+                else:
+                    booking.payment_status = "paid"
             elif payment.status == "pending_offline":
                 booking.payment_status = "pending_offline"
             elif payment.status in {"refunded", "partially_refunded"}:

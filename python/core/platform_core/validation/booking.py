@@ -19,7 +19,9 @@ RESERVABLE_OFFERING_TYPES = frozenset({
     "service", "accommodation", "class_session", "rental", "menu_item", "product",
 })
 PAYMENT_METHODS = frozenset({"cod", "online", "pay_at_business", "pay_later"})
-PAYMENT_STATUSES = frozenset({"pending", "pending_offline", "paid", "refunded"})
+PAYMENT_STATUSES = frozenset({
+    "pending", "pending_offline", "deposit_paid", "paid", "refunded",
+})
 NOTE_BODY_MAX = 5000
 REASON_MAX = 500
 
@@ -158,7 +160,9 @@ def validate_create_payload(raw: dict[str, Any]) -> dict[str, Any]:
             raw.get("customer_contact_id"), field="customer_contact_id"
         ),
         "offering_id": validate_optional_uuid(raw.get("offering_id"), field="offering_id"),
-        "employee_id": validate_optional_uuid(raw.get("employee_id"), field="employee_id"),
+        "provider_id": validate_optional_uuid(
+            raw.get("provider_id") or raw.get("employee_id"), field="provider_id"
+        ),
         "reservation_mode": mode,
         "starts_at": starts_at,
         "ends_at": ends_at,
@@ -228,7 +232,9 @@ def validate_availability_query(raw: dict[str, Any]) -> dict[str, Any]:
     party_size = int(raw.get("party_size") or 1)
     return {
         "location_id": validate_uuid(raw["location_id"], field="location_id"),
-        "employee_id": validate_optional_uuid(raw.get("employee_id"), field="employee_id"),
+        "provider_id": validate_optional_uuid(
+            raw.get("provider_id") or raw.get("employee_id"), field="provider_id"
+        ),
         "offering_id": validate_optional_uuid(raw.get("offering_id"), field="offering_id"),
         "reservation_mode": mode,
         "starts_at": starts_at,

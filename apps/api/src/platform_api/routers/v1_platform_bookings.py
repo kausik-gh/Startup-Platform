@@ -40,7 +40,8 @@ class CreateBookingRequest(BaseModel):
     location_id: UUID
     customer_contact_id: UUID | None = None
     offering_id: UUID | None = None
-    employee_id: UUID | None = None
+    provider_id: UUID | None = None
+    employee_id: UUID | None = None  # legacy alias → provider_id
     reservation_mode: str = "appointment"
     title: str | None = None
     starts_at: str
@@ -79,11 +80,21 @@ class CreateNoteRequest(BaseModel):
     body: str
 
 
+class BookingsPolicyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    require_deposit: bool | None = None
+    deposit_amount: float | None = None
+    deposit_percent: float | None = None
+    cancel_window_hours: int | None = Field(default=None, ge=0)
+
+
 class AvailabilityCheckRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     location_id: UUID
-    employee_id: UUID | None = None
+    provider_id: UUID | None = None
+    employee_id: UUID | None = None  # legacy alias → provider_id
     offering_id: UUID | None = None
     reservation_mode: str = "appointment"
     starts_at: str
@@ -106,7 +117,7 @@ async def list_bookings(
     search: str | None = Query(default=None, min_length=1, max_length=120),
     customer_contact_id: UUID | None = Query(default=None),
     location_id: UUID | None = Query(default=None),
-    employee_id: UUID | None = Query(default=None),
+    provider_id: UUID | None = Query(default=None),
     actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
@@ -117,7 +128,7 @@ async def list_bookings(
         search=search,
         customer_contact_id=customer_contact_id,
         location_id=location_id,
-        employee_id=employee_id,
+        provider_id=provider_id,
     )
     return {
         "data": [BookingService.serialize(b) for b in bookings],
@@ -325,5 +336,59 @@ async def check_booking_availability(
     )
     return {
         "data": result,
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.get("/{business_id}/bookings-policy")
+async def get_bookings_policy(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    policy = await BookingService.get_or_create_policy(session, business_id)
+    await session.commit()
+    return {
+        "data": {
+            "require_deposit": policy.require_deposit,
+            "deposit_amount": float(policy.deposit_amount)
+            if policy.deposit_amount is not None
+            else None,
+            "deposit_percent": float(policy.deposit_percent)
+            if policy.deposit_percent is not None
+            else None,
+            "cancel_window_hours": policy.cancel_window_hours,
+            "version": policy.version,
+        },
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.patch("/{business_id}/bookings-policy")
+async def patch_bookings_policy(
+    business_id: UUID,
+    body: BookingsPolicyRequest,
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    policy = await BookingService.update_policy(
+        session,
+        business_id=business_id,
+        actor_id=actor.request.identity_id,
+        payload=body.model_dump(exclude_unset=True),
+    )
+    await session.commit()
+    return {
+        "data": {
+            "require_deposit": policy.require_deposit,
+            "deposit_amount": float(policy.deposit_amount)
+            if policy.deposit_amount is not None
+            else None,
+            "deposit_percent": float(policy.deposit_percent)
+            if policy.deposit_percent is not None
+            else None,
+            "cancel_window_hours": policy.cancel_window_hours,
+            "version": policy.version,
+        },
         "meta": {"correlation_id": actor.request.correlation_id},
     }

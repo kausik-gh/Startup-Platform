@@ -14,6 +14,7 @@ from platform_core.resolvers.booking_resolver import BookingResolver
 from platform_core.services.audit import AuditService
 from platform_core.services.availability import AvailabilityService
 from platform_core.services.business import BusinessService
+from platform_core.services.consumer_activity import ConsumerActivityService
 from platform_core.services.customer_timeline import CustomerTimelineService
 from platform_core.services.outbox import OutboxService
 from platform_core.validation.booking import STATUS_EVENT_MAP, validate_reschedule_payload, validate_status_transition_payload
@@ -129,6 +130,25 @@ class BookingLifecycleService:
                     "starts_at": booking.starts_at.isoformat(),
                 },
             )
+            if event_type in {
+                "booking.created",
+                "booking.confirmed",
+                "booking.cancelled",
+                "booking.completed",
+            }:
+                await ConsumerActivityService.record_for_customer_contact(
+                    session,
+                    business_id=business_id,
+                    customer_contact_id=booking.customer_contact_id,
+                    activity_type=event_type,
+                    resource_type="booking",
+                    resource_id=booking.id,
+                    summary={
+                        "booking_number": booking.booking_number,
+                        "status": booking.status,
+                        "starts_at": booking.starts_at.isoformat(),
+                    },
+                )
 
     @staticmethod
     async def transition_status(
@@ -211,7 +231,7 @@ class BookingLifecycleService:
             session,
             business_id=business_id,
             location_id=booking.location_id,
-            employee_id=booking.employee_id,
+            provider_id=booking.provider_id,
             offering_id=booking.offering_id,
             reservation_mode=booking.reservation_mode,
             starts_at=validated["starts_at"],

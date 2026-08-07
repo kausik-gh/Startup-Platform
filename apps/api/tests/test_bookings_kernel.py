@@ -144,31 +144,55 @@ def test_booking_lifecycle(owner: tuple[dict[str, str], uuid.UUID]) -> None:
     assert history_resp.json()["meta"]["count"] >= 4
 
 
+def _enable_booking_modules(
+    client: TestClient, headers: dict[str, str], business_id: str
+) -> None:
+    for mid in ("workforce", "bookings", "offerings-catalog", "payments"):
+        resp = client.post(f"/v1/b/{business_id}/modules/{mid}/enable", headers=headers)
+        assert resp.status_code == 200, resp.text
+
+
+def _create_provider(
+    client: TestClient,
+    headers: dict[str, str],
+    business_id: str,
+    location_id: str,
+    offering_id: str | None = None,
+) -> str:
+    payload: dict[str, Any] = {
+        "display_name": f"Provider {uuid.uuid4().hex[:6]}",
+        "location_ids": [location_id],
+        "primary_location_id": location_id,
+    }
+    if offering_id:
+        payload["offering_ids"] = [offering_id]
+    resp = client.post(
+        f"/v1/platform/businesses/{business_id}/workforce/members",
+        json=payload,
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    return cast(str, resp.json()["data"]["id"])
+
+
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
-def test_booking_employee_conflict(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+def test_booking_provider_conflict_appointment(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """Appointment: WorkforceMember exclusivity — NOT a capacity/room pool."""
     headers, _ = owner
     client = TestClient(app)
     business_id = _create_business(client, headers)
+    _enable_booking_modules(client, headers, business_id)
     location_id = _primary_location_id(client, headers, business_id)
-
-    emp_resp = client.post(
-        f"/v1/platform/businesses/{business_id}/employees",
-        json={
-            "display_name": "Provider One",
-            "location_ids": [location_id],
-            "primary_location_id": location_id,
-        },
-        headers=headers,
-    )
-    assert emp_resp.status_code == 200, emp_resp.text
-    employee_id = emp_resp.json()["data"]["id"]
+    provider_id = _create_provider(client, headers, business_id, location_id)
 
     starts_at, ends_at = _slot(hours_ahead=48)
     first = client.post(
         f"/v1/platform/businesses/{business_id}/bookings",
         json={
             "location_id": location_id,
-            "employee_id": employee_id,
+            "provider_id": provider_id,
             "reservation_mode": "appointment",
             "title": "First slot",
             "starts_at": starts_at,
@@ -178,13 +202,17 @@ def test_booking_employee_conflict(owner: tuple[dict[str, str], uuid.UUID]) -> N
     )
     assert first.status_code == 200, first.text
 
-    overlap_start = (datetime.fromisoformat(starts_at.replace("Z", "+00:00")) + timedelta(minutes=30)).isoformat()
-    overlap_end = (datetime.fromisoformat(ends_at.replace("Z", "+00:00")) + timedelta(minutes=30)).isoformat()
+    overlap_start = (
+        datetime.fromisoformat(starts_at.replace("Z", "+00:00")) + timedelta(minutes=30)
+    ).isoformat()
+    overlap_end = (
+        datetime.fromisoformat(ends_at.replace("Z", "+00:00")) + timedelta(minutes=30)
+    ).isoformat()
     second = client.post(
         f"/v1/platform/businesses/{business_id}/bookings",
         json={
             "location_id": location_id,
-            "employee_id": employee_id,
+            "provider_id": provider_id,
             "reservation_mode": "appointment",
             "title": "Overlap slot",
             "starts_at": overlap_start,
@@ -193,6 +221,186 @@ def test_booking_employee_conflict(owner: tuple[dict[str, str], uuid.UUID]) -> N
         headers=headers,
     )
     assert second.status_code == 409, second.text
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_accommodation_date_range_capacity_not_stock(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """Accommodation: overlapping date-range capacity conflict — not inventory decrement."""
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    _enable_booking_modules(client, headers, business_id)
+    location_id = _primary_location_id(client, headers, business_id)
+    starts_at, ends_at = _slot(hours_ahead=24, duration_hours=48)
+
+    first = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "accommodation",
+            "title": "Room A",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 1,
+            "capacity": 1,
+        },
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+
+    second = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "accommodation",
+            "title": "Room B overlap",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 1,
+            "capacity": 1,
+        },
+        headers=headers,
+    )
+    assert second.status_code == 409, second.text
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_table_capacity_conflict(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    _enable_booking_modules(client, headers, business_id)
+    location_id = _primary_location_id(client, headers, business_id)
+    starts_at, ends_at = _slot(hours_ahead=30)
+
+    first = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "table",
+            "title": "Table party 2",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 2,
+            "capacity": 4,
+        },
+        headers=headers,
+    )
+    assert first.status_code == 200, first.text
+
+    second = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "table",
+            "title": "Table party 3",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 3,
+            "capacity": 4,
+        },
+        headers=headers,
+    )
+    assert second.status_code == 409, second.text
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_class_session_capacity_only_no_membership_gate(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """class_session is capacity-only; membership gating is Stage 6."""
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    _enable_booking_modules(client, headers, business_id)
+    location_id = _primary_location_id(client, headers, business_id)
+    starts_at, ends_at = _slot(hours_ahead=36)
+
+    ok = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "class_session",
+            "title": "Yoga",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 1,
+            "capacity": 2,
+        },
+        headers=headers,
+    )
+    assert ok.status_code == 200, ok.text
+
+    ok2 = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "class_session",
+            "title": "Yoga guest 2",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 1,
+            "capacity": 2,
+        },
+        headers=headers,
+    )
+    assert ok2.status_code == 200, ok2.text
+
+    full = client.post(
+        f"/v1/platform/businesses/{business_id}/bookings",
+        json={
+            "location_id": location_id,
+            "reservation_mode": "class_session",
+            "title": "Yoga overflow",
+            "starts_at": starts_at,
+            "ends_at": ends_at,
+            "party_size": 1,
+            "capacity": 2,
+        },
+        headers=headers,
+    )
+    assert full.status_code == 409, full.text
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_concurrent_provider_booking_only_one_succeeds(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    _enable_booking_modules(client, headers, business_id)
+    location_id = _primary_location_id(client, headers, business_id)
+    provider_id = _create_provider(client, headers, business_id, location_id)
+    starts_at, ends_at = _slot(hours_ahead=60)
+
+    async def _race() -> list[int]:
+        from httpx import ASGITransport, AsyncClient
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            async def _one(i: int) -> int:
+                resp = await ac.post(
+                    f"/v1/platform/businesses/{business_id}/bookings",
+                    json={
+                        "location_id": location_id,
+                        "provider_id": provider_id,
+                        "reservation_mode": "appointment",
+                        "title": f"Race {i}",
+                        "starts_at": starts_at,
+                        "ends_at": ends_at,
+                        "idempotency_key": f"race-{uuid.uuid4()}",
+                    },
+                    headers=headers,
+                )
+                return resp.status_code
+
+            return list(await asyncio.gather(_one(1), _one(2)))
+
+    codes = asyncio.run(_race())
+    assert sorted(codes) == [200, 409], codes
 
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")

@@ -32,3 +32,11 @@ export async function apiSend<T>(
   }
   return res.json() as Promise<T>
 }
+
+export async function apiPost<T>(path: string, body: unknown, token: string): Promise<T> {
+  return apiSend<T>(path, token, 'POST', body)
+}
+
+export async function apiPatch<T>(path: string, body: unknown, token: string): Promise<T> {
+  return apiSend<T>(path, token, 'PATCH', body)
+}
