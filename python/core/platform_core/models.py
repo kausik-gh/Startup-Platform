@@ -692,6 +692,88 @@ class OrderNote(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
 
 
+class FulfilmentSettings(Base):
+    __tablename__ = "fulfilment_settings"
+
+    business_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("businesses.id"), primary_key=True
+    )
+    pickup_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    delivery_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false")
+    )
+    delivery_fee_offering_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("offerings_catalog_offerings.id"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+
+class FulfilmentZone(Base):
+    __tablename__ = "fulfilment_zones"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    business_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("businesses.id"))
+    location_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("business_locations.id"), nullable=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    match_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'city'"))
+    city: Mapped[str | None] = mapped_column(Text, nullable=True)
+    postal_prefix: Mapped[str | None] = mapped_column(Text, nullable=True)
+    center_lat: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    center_lng: Mapped[float | None] = mapped_column(Numeric(10, 7), nullable=True)
+    radius_km: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    charge_amount: Mapped[float] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default=text("0")
+    )
+    currency: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'INR'"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+
+class FulfilmentJob(Base):
+    __tablename__ = "fulfilment_jobs"
+
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    business_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("businesses.id"))
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders_orders.id"), unique=True
+    )
+    location_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("business_locations.id")
+    )
+    mode: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    zone_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("fulfilment_zones.id"), nullable=True
+    )
+    delivery_address: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    delivery_charge: Mapped[float] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default=text("0")
+    )
+    currency: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'INR'"))
+    tracking_token: Mapped[str] = mapped_column(Text, nullable=False)
+    tracking_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    outcome_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("platform_identities.id"), nullable=True
+    )
+    updated_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("platform_identities.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+
+
 class Booking(Base):
     __tablename__ = "bookings_bookings"
 

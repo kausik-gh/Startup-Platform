@@ -101,6 +101,12 @@ KNOWN_HANDLERS = {
     "marketplace.index_failed",
     "marketplace.deindexed",
     "marketplace.reindex_triggered",
+    "fulfilment.job_created",
+    "fulfilment.status_changed",
+    "fulfilment.failed",
+    "fulfilment.delivered",
+    "fulfilment.zone_configured",
+    "fulfilment.settings_updated",
     "business.initialized",
     "business.context_switched",
     "permission.granted",
@@ -178,6 +184,29 @@ async def _mark_dead_letter(session: AsyncSession, event: dict[str, Any], error:
     )
 
 
+async def _dispatch_order_cancelled_fulfilment(
+    session: AsyncSession, event: dict[str, Any]
+) -> None:
+    from uuid import UUID
+
+    from platform_core.services.fulfilment import FulfilmentService
+
+    payload = event.get("payload") or {}
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    business_id = payload.get("business_id") or event.get("business_id")
+    order_id = payload.get("order_id")
+    if not business_id or not order_id:
+        return
+    await FulfilmentService.cancel_for_order(
+        session,
+        business_id=UUID(str(business_id)),
+        order_id=UUID(str(order_id)),
+        correlation_id=str(event.get("correlation_id") or event.get("id")),
+        reason=str(payload.get("reason") or "Order cancelled"),
+    )
+
+
 async def _dispatch_marketplace_index(session: AsyncSession, event: dict[str, Any]) -> None:
     from uuid import UUID
 
@@ -210,6 +239,8 @@ async def poll_and_dispatch_outbox(session: AsyncSession, worker_id: str) -> int
                 raise ValueError(f"No handler for event type: {event_type}")
             if event_type in MARKETPLACE_INDEX_TRIGGERS:
                 await _dispatch_marketplace_index(session, dict(event))
+            if event_type in {"order.cancelled", "order.rejected"}:
+                await _dispatch_order_cancelled_fulfilment(session, dict(event))
             await _mark_completed(session, str(event["id"]))
             processed += 1
         except Exception as exc:

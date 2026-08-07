@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { OfferingsListSection } from './OfferingsListSection'
 
 type Section = {
   id: string
@@ -75,11 +76,11 @@ export function SectionRenderer({
       )
     case 'offerings_list':
       return (
-        <section style={{ padding: '2.5rem 1.5rem', maxWidth: '48rem', margin: '0 auto' }}>
-          <h2>{String(content.title || 'Offerings')}</h2>
-          {content.subtitle ? <p>{String(content.subtitle)}</p> : null}
-          <p style={{ opacity: 0.75 }}>Offerings load through the catalog public contract when active.</p>
-        </section>
+        <OfferingsListSection
+          businessSlug={businessSlug}
+          title={String(content.title || 'Offerings')}
+          subtitle={content.subtitle ? String(content.subtitle) : undefined}
+        />
       )
     case 'cta_band':
       return (
