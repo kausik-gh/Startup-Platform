@@ -125,7 +125,7 @@ class CategoryService:
         payload: dict[str, Any],
     ) -> OfferingCategory:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="create product category")
+        assert_business_mutable(business.state, action="create product category")
         validated = validate_category_create_payload(payload)
         if validated["parent_id"]:
             await OfferingResolver.resolve_category(
@@ -171,7 +171,7 @@ class CategoryService:
         expected_version: int | None = None,
     ) -> OfferingCategory:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update product category")
+        assert_business_mutable(business.state, action="update product category")
         category = await OfferingResolver.resolve_category(
             session, business_id=business_id, category_id=category_id
         )
@@ -229,7 +229,7 @@ class CategoryService:
         expected_version: int | None = None,
     ) -> OfferingCategory:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="archive product category")
+        assert_business_mutable(business.state, action="archive product category")
         category = await OfferingResolver.resolve_category(
             session, business_id=business_id, category_id=category_id
         )

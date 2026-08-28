@@ -42,7 +42,7 @@ class MerchantService:
         payload: dict[str, Any],
     ) -> MerchantConnection:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update merchant connection")
+        assert_business_mutable(business.state, action="update merchant connection")
         validated = validate_merchant_update_payload(payload)
         existing = await PaymentResolver.resolve_merchant(
             session, business_id=business_id, provider=validated["provider"]

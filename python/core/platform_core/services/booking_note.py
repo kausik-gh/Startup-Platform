@@ -52,7 +52,7 @@ class BookingNoteService:
         body: str,
     ) -> BookingNote:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="add booking note")
+        assert_business_mutable(business.state, action="add booking note")
         await BookingResolver.resolve(session, business_id=business_id, booking_id=booking_id)
         normalized = validate_note_body(body)
         note = BookingNote(

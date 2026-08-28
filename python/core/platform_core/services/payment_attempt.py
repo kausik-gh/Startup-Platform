@@ -170,7 +170,7 @@ class PaymentAttemptService:
         payload: dict[str, Any],
     ) -> PaymentAttempt:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="create payment")
+        assert_business_mutable(business.state, action="create payment")
         validated = validate_create_payment_payload(payload)
 
         if validated["idempotency_key"]:
@@ -288,7 +288,7 @@ class PaymentAttemptService:
         expected_version: int | None = None,
     ) -> PaymentAttempt:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="record payment settlement")
+        assert_business_mutable(business.state, action="record payment settlement")
         payment = await PaymentResolver.resolve_attempt(
             session, business_id=business_id, payment_id=payment_id
         )

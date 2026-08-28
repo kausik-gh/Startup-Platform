@@ -115,6 +115,7 @@ class InventoryService:
         reason: str,
         before_state: dict[str, Any],
         after_state: dict[str, Any],
+        actor_context: str = "business",
     ) -> None:
         base_payload: dict[str, Any] = {
             "business_id": str(business_id),
@@ -185,7 +186,7 @@ class InventoryService:
             session,
             event_type=audit_event,
             actor_identity_id=actor_id,
-            actor_context="business",
+            actor_context=actor_context,
             business_id=business_id,
             resource_type="inventory_record",
             resource_id=record.id,
@@ -242,7 +243,7 @@ class InventoryService:
         payload: dict[str, Any],
     ) -> InventoryRecord:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="set opening stock")
+        assert_business_mutable(business.state, action="set opening stock")
         validated = validate_opening_stock_payload(payload)
         offering = await InventoryService._validate_refs(
             session,
@@ -315,7 +316,7 @@ class InventoryService:
         expected_version: int | None = None,
     ) -> InventoryRecord:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="adjust inventory")
+        assert_business_mutable(business.state, action="adjust inventory")
         validated = validate_adjustment_payload(payload)
         offering = await InventoryService._validate_refs(
             session,
@@ -404,6 +405,7 @@ class InventoryService:
         correlation_id: str,
         order_id: uuid.UUID,
         reason: str,
+        actor_context: str = "business",
     ) -> InventoryRecord:
         if quantity <= 0:
             raise ValidationError("Reservation quantity must be positive")
@@ -461,6 +463,7 @@ class InventoryService:
             reason=reason,
             before_state=before,
             after_state=after,
+            actor_context=actor_context,
         )
         return record
 

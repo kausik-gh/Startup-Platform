@@ -28,7 +28,6 @@ from platform_core.services.booking import BookingService
 from platform_core.services.booking_lifecycle import BookingLifecycleService
 from platform_core.services.business import BusinessService
 from platform_core.services.customer import CustomerService
-from platform_core.services.identity import IdentityService
 from platform_core.services.location import LocationService
 from platform_core.validation.booking import validate_availability_query
 
@@ -211,40 +210,26 @@ class PublicBookingService:
                 details={"field": "guest", "code": "policy_restriction"},
             )
 
-        guest_user_id = uuid.uuid5(uuid.NAMESPACE_URL, f"guest-booking:{business.id}:{email}")
-        identity = await IdentityService.bootstrap_identity(
-            session, guest_user_id, email, display_name=display_name
+        # Doc 05 Part 7.1: a guest booking is bounded to the transaction and
+        # never becomes a Platform Identity. Customer attribution is the
+        # business-scoped CustomerContact; audit/actor attribution is the
+        # storefront owner acting in a guest-checkout context.
+        actor_id = business.primary_owner_identity_id
+        contact = await CustomerService.find_or_create_contact(
+            session,
+            business_id=business.id,
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            actor_context="guest_checkout",
+            display_name=display_name,
+            email=email,
+            phone=phone,
         )
-
-        from platform_core.models import CustomerContact
-
-        contact = (
-            await session.execute(
-                select(CustomerContact).where(
-                    CustomerContact.business_id == business.id,
-                    CustomerContact.email == email,
-                    CustomerContact.deleted_at.is_(None),
-                )
-            )
-        ).scalars().first()
-        if contact is None:
-            contact = await CustomerService.create_customer(
-                session,
-                business_id=business.id,
-                actor_id=identity.id,
-                correlation_id=correlation_id,
-                payload={
-                    "display_name": display_name,
-                    "email": email,
-                    "phone": phone,
-                    "identity_id": str(identity.id),
-                },
-            )
 
         booking = await BookingService.create_booking(
             session,
             business_id=business.id,
-            actor_id=identity.id,
+            actor_id=actor_id,
             correlation_id=correlation_id,
             payload={
                 "location_id": str(location_id),
@@ -330,7 +315,8 @@ class PublicBookingService:
                 "Cancellation window has closed",
                 details={"code": "cancellation_window_closed"},
             )
-        guest_actor = booking.cancelled_by or uuid.uuid4()
+        business = await BusinessService.get_by_id(session, booking.business_id)
+        guest_actor = booking.cancelled_by or business.primary_owner_identity_id
         # Prefer linked customer identity for audit when present
         if booking.customer_contact_id:
             from platform_core.models import CustomerContact
@@ -375,7 +361,8 @@ class PublicBookingService:
                 "Reschedule window has closed",
                 details={"code": "cancellation_window_closed"},
             )
-        actor_id = uuid.uuid4()
+        business = await BusinessService.get_by_id(session, booking.business_id)
+        actor_id = business.primary_owner_identity_id
         if booking.customer_contact_id:
             from platform_core.models import CustomerContact
 

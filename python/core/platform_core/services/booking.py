@@ -86,7 +86,7 @@ class BookingService:
         payload: dict[str, Any],
     ) -> Booking:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="create booking")
+        assert_business_mutable(business.state, action="create booking")
         validated = validate_create_payload(payload)
 
         if validated["idempotency_key"]:
@@ -405,7 +405,7 @@ class BookingService:
         expected_version: int | None = None,
     ) -> Booking:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update booking")
+        assert_business_mutable(business.state, action="update booking")
         booking = await BookingResolver.resolve_mutable(
             session, business_id=business_id, booking_id=booking_id
         )

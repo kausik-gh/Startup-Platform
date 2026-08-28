@@ -112,6 +112,7 @@ class OrderService:
         line_items: list[OrderLineItem],
         actor_id: uuid.UUID,
         correlation_id: str,
+        actor_context: str = "business",
     ) -> None:
         for item in line_items:
             if not item.track_inventory:
@@ -127,6 +128,7 @@ class OrderService:
                 correlation_id=correlation_id,
                 order_id=order.id,
                 reason=f"Order {order.order_number} reservation",
+                actor_context=actor_context,
             )
             item.quantity_reserved = item.quantity
 
@@ -139,6 +141,7 @@ class OrderService:
         line_items: list[OrderLineItem],
         actor_id: uuid.UUID,
         correlation_id: str,
+        actor_context: str = "business",
     ) -> None:
         after = OrderResolver.serialize_order_detail(order, line_items=line_items)
         payload: dict[str, Any] = {
@@ -163,7 +166,7 @@ class OrderService:
             session,
             event_type="order.created",
             actor_identity_id=actor_id,
-            actor_context="business",
+            actor_context=actor_context,
             business_id=business_id,
             resource_type="order",
             resource_id=order.id,
@@ -226,9 +229,10 @@ class OrderService:
         actor_id: uuid.UUID,
         correlation_id: str,
         payload: dict[str, Any],
+        actor_context: str = "business",
     ) -> SalesOrder:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="create order")
+        assert_business_mutable(business.state, action="create order")
         validated = validate_create_payload(payload)
         if validated["idempotency_key"]:
             existing = await session.execute(
@@ -299,6 +303,7 @@ class OrderService:
             line_items=line_items,
             actor_id=actor_id,
             correlation_id=correlation_id,
+            actor_context=actor_context,
         )
 
         history = OrderStatusHistory(
@@ -319,6 +324,7 @@ class OrderService:
             line_items=line_items,
             actor_id=actor_id,
             correlation_id=correlation_id,
+            actor_context=actor_context,
         )
         return order
 
@@ -334,7 +340,7 @@ class OrderService:
         expected_version: int | None = None,
     ) -> SalesOrder:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update order")
+        assert_business_mutable(business.state, action="update order")
         order = await OrderResolver.resolve_mutable(
             session, business_id=business_id, order_id=order_id
         )

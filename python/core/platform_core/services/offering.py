@@ -166,7 +166,7 @@ class OfferingService:
         payload: dict[str, Any],
     ) -> Offering:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="create product")
+        assert_business_mutable(business.state, action="create product")
         validated = validate_product_create_payload(payload)
         status = validated.pop("status", "draft")
         if status not in OFFERING_STATUSES:
@@ -213,7 +213,7 @@ class OfferingService:
         expected_version: int | None = None,
     ) -> Offering:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update product")
+        assert_business_mutable(business.state, action="update product")
         offering = await OfferingResolver.resolve_operable(
             session, business_id=business_id, offering_id=offering_id
         )
@@ -262,7 +262,7 @@ class OfferingService:
         expected_version: int | None = None,
     ) -> Offering:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="archive product")
+        assert_business_mutable(business.state, action="archive product")
         offering = await OfferingResolver.resolve(
             session, business_id=business_id, offering_id=offering_id
         )
@@ -296,7 +296,7 @@ class OfferingService:
         expected_version: int | None = None,
     ) -> Offering:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="restore product")
+        assert_business_mutable(business.state, action="restore product")
         offering = await OfferingResolver.resolve(
             session, business_id=business_id, offering_id=offering_id
         )
@@ -356,7 +356,7 @@ class OfferingService:
         payload: dict[str, Any],
     ) -> OfferingVariant:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="create product variant")
+        assert_business_mutable(business.state, action="create product variant")
         offering = await OfferingResolver.resolve_operable(
             session, business_id=business_id, offering_id=offering_id
         )

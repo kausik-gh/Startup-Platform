@@ -49,60 +49,6 @@ CREATE TABLE business_profiles (
 CREATE INDEX idx_business_profiles_business ON business_profiles(business_id);
 
 -- ============================================================
--- OFFERINGS CATALOG (module: offerings-catalog)
--- Canonical offering types per Doc 11 §9.1
--- ============================================================
-CREATE TABLE offerings_catalog_offerings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    business_id UUID NOT NULL REFERENCES businesses(id),
-    -- Identity
-    title TEXT NOT NULL,
-    description TEXT,
-    category TEXT,
-    -- Canonical offering type (Doc 11 §9.1)
-    offering_type TEXT NOT NULL CHECK (offering_type IN (
-        'product',            -- retail/supermarket product
-        'menu_item',          -- food/beverage item
-        'service',            -- appointment-based or general service
-        'accommodation',      -- hotel room/unit
-        'membership_plan',    -- gym/studio/club plan
-        'class_session',      -- scheduled class or cohort session
-        'rental',             -- equipment/vehicle/venue rental
-        'general_listing'     -- enquiry-led listing
-    )),
-    -- Status lifecycle
-    status TEXT NOT NULL DEFAULT 'draft'
-        CHECK (status IN ('draft', 'active', 'archived')),
-    -- Price presentation (Doc 11 §9.1 price variants)
-    price_type TEXT NOT NULL DEFAULT 'fixed'
-        CHECK (price_type IN ('fixed', 'starting_from', 'variable', 'free', 'enquiry')),
-    price_amount NUMERIC(12, 2),   -- NULL when type is enquiry or free
-    currency TEXT NOT NULL DEFAULT 'USD',
-    -- Media
-    primary_image_asset_id UUID REFERENCES media_assets(id),
-    -- Location availability (NULL = all locations)
-    location_availability JSONB,  -- array of location_ids or null
-    -- Behavioral flags (Doc 11 §9.1)
-    is_orderable BOOLEAN NOT NULL DEFAULT false,
-    is_bookable BOOLEAN NOT NULL DEFAULT false,
-    is_enquiry_only BOOLEAN NOT NULL DEFAULT false,
-    -- Variants/options (controlled JSONB, no executable content)
-    options JSONB NOT NULL DEFAULT '[]'::jsonb,
-    -- Audit
-    created_by UUID NOT NULL REFERENCES platform_identities(id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    deleted_at TIMESTAMPTZ,
-    version INTEGER NOT NULL DEFAULT 1
-);
-
-CREATE INDEX idx_offerings_business ON offerings_catalog_offerings(business_id);
-CREATE INDEX idx_offerings_active ON offerings_catalog_offerings(business_id, offering_type)
-    WHERE deleted_at IS NULL AND status = 'active';
-CREATE INDEX idx_offerings_status ON offerings_catalog_offerings(business_id, status)
-    WHERE deleted_at IS NULL;
-
--- ============================================================
 -- WEBSITE SECTION TYPES (static registry)
 -- Core section types for Stage 2 structured Website
 -- ============================================================
@@ -247,8 +193,6 @@ CREATE TRIGGER trg_media_assets_updated_at BEFORE UPDATE ON media_assets
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_business_profiles_updated_at BEFORE UPDATE ON business_profiles
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_offerings_updated_at BEFORE UPDATE ON offerings_catalog_offerings
-    FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_websites_updated_at BEFORE UPDATE ON websites
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 CREATE TRIGGER trg_website_versions_updated_at BEFORE UPDATE ON website_versions
@@ -263,7 +207,6 @@ CREATE TRIGGER trg_website_sections_updated_at BEFORE UPDATE ON website_sections
 -- ============================================================
 ALTER TABLE media_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE business_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE offerings_catalog_offerings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE website_section_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE websites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE website_versions ENABLE ROW LEVEL SECURITY;
@@ -276,12 +219,6 @@ CREATE POLICY business_profiles_member_read ON business_profiles
     FOR SELECT USING (business_id = current_business_id());
 
 CREATE POLICY business_profiles_member_write ON business_profiles
-    FOR ALL USING (business_id = current_business_id());
-
-CREATE POLICY offerings_member_read ON offerings_catalog_offerings
-    FOR SELECT USING (business_id = current_business_id() AND deleted_at IS NULL);
-
-CREATE POLICY offerings_member_write ON offerings_catalog_offerings
     FOR ALL USING (business_id = current_business_id());
 
 CREATE POLICY websites_member_read ON websites

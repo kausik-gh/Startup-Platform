@@ -52,7 +52,7 @@ class OrderNoteService:
         body: str,
     ) -> OrderNote:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="add order note")
+        assert_business_mutable(business.state, action="add order note")
         await OrderResolver.resolve(session, business_id=business_id, order_id=order_id)
         normalized = validate_note_body(body)
         note = OrderNote(

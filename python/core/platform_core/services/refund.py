@@ -55,7 +55,7 @@ class RefundService:
         expected_version: int | None = None,
     ) -> tuple[PaymentRefund, PaymentAttempt]:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="refund payment")
+        assert_business_mutable(business.state, action="refund payment")
         payment = await PaymentResolver.resolve_attempt(
             session, business_id=business_id, payment_id=payment_id
         )

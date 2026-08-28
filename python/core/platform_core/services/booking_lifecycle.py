@@ -162,7 +162,7 @@ class BookingLifecycleService:
         expected_version: int | None = None,
     ) -> Booking:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update booking status")
+        assert_business_mutable(business.state, action="update booking status")
         booking = await BookingResolver.resolve(session, business_id=business_id, booking_id=booking_id)
         BookingLifecycleService._check_version(booking, expected_version)
         validated = validate_status_transition_payload(payload, current_status=booking.status)
@@ -219,7 +219,7 @@ class BookingLifecycleService:
         expected_version: int | None = None,
     ) -> Booking:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="reschedule booking")
+        assert_business_mutable(business.state, action="reschedule booking")
         booking = await BookingResolver.resolve(session, business_id=business_id, booking_id=booking_id)
         BookingLifecycleService._check_version(booking, expected_version)
         validated = validate_reschedule_payload(payload, current_status=booking.status)

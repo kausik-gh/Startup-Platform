@@ -198,7 +198,7 @@ class OrderLifecycleService:
         expected_version: int | None = None,
     ) -> SalesOrder:
         business = await BusinessService.get_by_id(session, business_id)
-        assert_business_mutable(business.status, action="update order status")
+        assert_business_mutable(business.state, action="update order status")
         order = await OrderResolver.resolve(session, business_id=business_id, order_id=order_id)
         OrderLifecycleService._check_version(order, expected_version)
         validated = validate_status_transition_payload(payload, current_status=order.status)

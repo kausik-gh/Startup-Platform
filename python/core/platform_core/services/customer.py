@@ -54,6 +54,7 @@ class CustomerService:
         before_state: dict[str, Any] | None,
         after_state: dict[str, Any],
         extra_payload: dict[str, Any] | None = None,
+        actor_context: str = "business",
     ) -> None:
         payload: dict[str, Any] = {
             "business_id": str(business_id),
@@ -76,7 +77,7 @@ class CustomerService:
             session,
             event_type=event_type,
             actor_identity_id=actor_id,
-            actor_context="business",
+            actor_context=actor_context,
             business_id=business_id,
             resource_type="customer",
             resource_id=contact.id,
@@ -166,6 +167,48 @@ class CustomerService:
         return cast(dict[str, Any] | None, CustomerResolver.serialize_contact(contact))
 
     @staticmethod
+    async def find_or_create_contact(
+        session: AsyncSession,
+        *,
+        business_id: uuid.UUID,
+        correlation_id: str,
+        actor_id: uuid.UUID,
+        display_name: str,
+        email: str | None,
+        phone: str | None,
+        actor_context: str = "business",
+    ) -> CustomerContact:
+        """Resolve an existing contact by email/phone within the business, or
+        create one. Used by guest checkout/booking — never sets identity_id."""
+        base = select(CustomerContact).where(
+            CustomerContact.business_id == business_id,
+            CustomerContact.deleted_at.is_(None),
+        )
+        for column, value in (
+            (CustomerContact.email, email),
+            (CustomerContact.phone, phone),
+        ):
+            if value:
+                found = (
+                    await session.execute(base.where(column == value))
+                ).scalars().first()
+                if found is not None:
+                    return found
+        return await CustomerService.create_customer(
+            session,
+            business_id=business_id,
+            actor_id=actor_id,
+            correlation_id=correlation_id,
+            actor_context=actor_context,
+            payload={
+                "display_name": display_name,
+                "email": email,
+                "phone": phone,
+                "identity_id": None,
+            },
+        )
+
+    @staticmethod
     async def create_customer(
         session: AsyncSession,
         *,
@@ -173,6 +216,7 @@ class CustomerService:
         actor_id: uuid.UUID,
         correlation_id: str,
         payload: dict[str, Any],
+        actor_context: str = "business",
     ) -> CustomerContact:
         business = await BusinessService.get_by_id(session, business_id)
         if business is None:
@@ -227,6 +271,7 @@ class CustomerService:
             correlation_id=correlation_id,
             before_state=None,
             after_state=after,
+            actor_context=actor_context,
         )
         if contact.tags:
             await CustomerService._publish(
@@ -240,6 +285,7 @@ class CustomerService:
                 before_state=None,
                 after_state=after,
                 extra_payload={"tags": contact.tags},
+                actor_context=actor_context,
             )
         return contact
 

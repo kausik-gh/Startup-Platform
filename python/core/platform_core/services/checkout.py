@@ -18,7 +18,6 @@ from platform_core.models import BusinessModuleState, MerchantConnection, Offeri
 from platform_core.services.business import BusinessService
 from platform_core.services.customer import CustomerService
 from platform_core.services.fulfilment import ACTIVE_MODULE_STATES, FulfilmentService
-from platform_core.services.identity import IdentityService
 from platform_core.services.location import LocationService
 from platform_core.services.order import OrderService
 from platform_core.services.payment_attempt import PaymentAttemptService
@@ -205,37 +204,21 @@ class CheckoutService:
                 details={"field": "guest"},
             )
 
-        # Guest identity for audit attribution (no login required).
-        guest_user_id = uuid.uuid5(uuid.NAMESPACE_URL, f"guest-checkout:{business.id}:{email}")
-        identity = await IdentityService.bootstrap_identity(
-            session, guest_user_id, email, display_name=display_name
+        # Doc 05 Part 7.1: a guest checkout is bounded to the transaction and
+        # never becomes a Platform Identity. Customer attribution is the
+        # business-scoped CustomerContact; audit/actor attribution is the
+        # storefront owner acting in a guest-checkout context.
+        actor_id = business.primary_owner_identity_id
+        contact = await CustomerService.find_or_create_contact(
+            session,
+            business_id=business.id,
+            correlation_id=correlation_id,
+            actor_id=actor_id,
+            actor_context="guest_checkout",
+            display_name=display_name,
+            email=email,
+            phone=phone,
         )
-
-        # Find or create customer contact.
-        from platform_core.models import CustomerContact
-
-        contact = (
-            await session.execute(
-                select(CustomerContact).where(
-                    CustomerContact.business_id == business.id,
-                    CustomerContact.email == email,
-                    CustomerContact.deleted_at.is_(None),
-                )
-            )
-        ).scalars().first()
-        if contact is None:
-            contact = await CustomerService.create_customer(
-                session,
-                business_id=business.id,
-                actor_id=identity.id,
-                correlation_id=correlation_id,
-                payload={
-                    "display_name": display_name,
-                    "email": email,
-                    "phone": phone,
-                    "identity_id": str(identity.id),
-                },
-            )
 
         # Validate offerings exist and are public/active before create.
         order_items: list[dict[str, Any]] = []
@@ -291,8 +274,9 @@ class CheckoutService:
         order = await OrderService.create_order(
             session,
             business_id=business.id,
-            actor_id=identity.id,
+            actor_id=actor_id,
             correlation_id=correlation_id,
+            actor_context="guest_checkout",
             payload={
                 "location_id": location_id,
                 "customer_contact_id": contact.id,
@@ -308,7 +292,7 @@ class CheckoutService:
             session,
             business_id=business.id,
             order=order,
-            actor_id=identity.id,
+            actor_id=actor_id,
             correlation_id=correlation_id,
             mode=mode,
             delivery_address=delivery_address if mode == "delivery" else None,
@@ -321,7 +305,7 @@ class CheckoutService:
                 payment = await PaymentAttemptService.create_attempt(
                     session,
                     business_id=business.id,
-                    actor_id=identity.id,
+                    actor_id=actor_id,
                     correlation_id=correlation_id,
                     payload={
                         "source_type": "order",
@@ -344,7 +328,7 @@ class CheckoutService:
             payment = await PaymentAttemptService.create_attempt(
                 session,
                 business_id=business.id,
-                actor_id=identity.id,
+                actor_id=actor_id,
                 correlation_id=correlation_id,
                 payload={
                     "source_type": "order",
