@@ -10,10 +10,16 @@ const NAV = [
   { href: '/website/theme', label: 'Theme', id: 'CORE-006' },
   { href: '/website/publish', label: 'Preview & Publish', id: 'CORE-007' },
   { href: '/marketplace', label: 'Marketplace', id: 'CORE-MP' },
+  { href: '/offerings', label: 'Offerings', id: 'OFF-001' },
+  { href: '/inventory', label: 'Inventory', id: 'INV-001' },
   { href: '/orders', label: 'Orders', id: 'ORD-001' },
   { href: '/fulfilment', label: 'Fulfilment', id: 'FUL-001' },
   { href: '/bookings', label: 'Bookings', id: 'BK-001' },
   { href: '/workforce', label: 'Workforce', id: 'WF-001' },
+  { href: '/customers', label: 'Customers', id: 'CRM-001' },
+  { href: '/leads', label: 'Leads', id: 'LEAD-001' },
+  { href: '/memberships', label: 'Memberships', id: 'MEM-001' },
+  { href: '/payments', label: 'Payments', id: 'PAY-001' },
 ]
 
 export default function WorkspaceBusinessLayout({

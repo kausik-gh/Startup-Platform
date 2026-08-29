@@ -3,10 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { getAccessToken } from '@/lib/supabase/access-token'
 
-export async function saveSectionContent(formData: FormData) {
+// Returns void: this is passed straight to <form action>, which discards any
+// return value. It previously returned {ok,error} objects that nothing could
+// read, so a failed save was indistinguishable from a successful one.
+// Throwing matches every other server action in this app.
+export async function saveSectionContent(formData: FormData): Promise<void> {
   const token = await getAccessToken()
   if (!token) {
-    return { ok: false as const, error: 'Not authenticated' }
+    throw new Error('Unauthorized')
   }
   const businessId = String(formData.get('businessId') || '')
   const sectionId = String(formData.get('sectionId') || '')
@@ -38,8 +42,7 @@ export async function saveSectionContent(formData: FormData) {
     body: JSON.stringify({ content }),
   })
   if (!res.ok) {
-    return { ok: false as const, error: await res.text() }
+    throw new Error(`Saving the section failed: ${res.status} ${await res.text()}`)
   }
   revalidatePath(`/b/${businessId}/website/pages`)
-  return { ok: true as const }
 }
