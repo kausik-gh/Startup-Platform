@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.exceptions import ConflictError, ResourceNotFound
-from platform_core.gates import assert_business_mutable
+from platform_core.gates import assert_business_accepts_commerce, assert_business_mutable
 from platform_core.models import MembershipEnrolment, MembershipEnrolmentStatusHistory
 from platform_core.resolvers.customer_resolver import CustomerResolver
 from platform_core.resolvers.membership_resolver import MembershipResolver
@@ -132,6 +132,9 @@ class MembershipEnrolmentService:
         if business is None:
             raise ResourceNotFound("Business")
         assert_business_mutable(business.state, action="create membership enrolment")
+        # Doc 04 §6.1: a suspended Business cannot receive orders. Standing
+        # (`status`) is a separate axis from lifecycle (`state`) — both apply.
+        assert_business_accepts_commerce(business.status, action="create membership enrolment")
         validated = validate_enrolment_create_payload(payload)
 
         if validated["idempotency_key"]:

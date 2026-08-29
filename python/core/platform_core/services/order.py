@@ -10,7 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.exceptions import ConflictError, ValidationError
-from platform_core.gates import assert_business_mutable
+from platform_core.gates import assert_business_accepts_commerce, assert_business_mutable
 from platform_core.models import OrderLineItem, OrderStatusHistory, SalesOrder
 from platform_core.resolvers.customer_resolver import CustomerResolver
 from platform_core.resolvers.location_resolver import LocationResolver
@@ -233,6 +233,9 @@ class OrderService:
     ) -> SalesOrder:
         business = await BusinessService.get_by_id(session, business_id)
         assert_business_mutable(business.state, action="create order")
+        # Doc 04 §6.1: a suspended Business cannot receive orders. Standing
+        # (`status`) is a separate axis from lifecycle (`state`) — both apply.
+        assert_business_accepts_commerce(business.status, action="create order")
         validated = validate_create_payload(payload)
         if validated["idempotency_key"]:
             existing = await session.execute(

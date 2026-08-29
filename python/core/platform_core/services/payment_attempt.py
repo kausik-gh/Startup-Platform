@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.exceptions import ConflictError, ValidationError
-from platform_core.gates import assert_business_mutable
+from platform_core.gates import assert_business_accepts_commerce, assert_business_mutable
 from platform_core.models import PaymentAttempt
 from platform_core.resolvers.booking_resolver import BookingResolver
 from platform_core.resolvers.customer_resolver import CustomerResolver
@@ -193,6 +193,9 @@ class PaymentAttemptService:
     ) -> PaymentAttempt:
         business = await BusinessService.get_by_id(session, business_id)
         assert_business_mutable(business.state, action="create payment")
+        # Doc 04 §6.1: a suspended Business cannot receive orders. Standing
+        # (`status`) is a separate axis from lifecycle (`state`) — both apply.
+        assert_business_accepts_commerce(business.status, action="create payment")
         validated = validate_create_payment_payload(payload)
 
         if validated["idempotency_key"]:

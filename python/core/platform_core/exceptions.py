@@ -127,6 +127,31 @@ class ResourceStateDenied(PlatformError):
         )
 
 
+class BusinessSuspended(PlatformError):
+    """Platform standing blocks commercial intake (Doc 04 §6.1, Doc 09 §15.1).
+
+    Distinct from ResourceStateDenied: that gate is about the Business
+    *lifecycle* (`state`), this one is about platform *standing* (`status`).
+    They are independent axes (Doc 03 §1.6) and a caller must be able to tell
+    "your business is closed" from "your business is suspended" — the second
+    has an appeal path, the first does not.
+
+    Doc 09 §15.1 requires the suspended state be conveyed "without exposing
+    sensitive policy internals", so no reason detail is returned here.
+    """
+
+    def __init__(self, action: str | None = None):
+        details: dict[str, Any] = {"gate": "business_status", "status": "suspended"}
+        if action is not None:
+            details["action"] = action
+        super().__init__(
+            status.HTTP_409_CONFLICT,
+            "BUSINESS_SUSPENDED",
+            "This business is suspended and cannot accept new orders or bookings.",
+            details,
+        )
+
+
 class PermissionDelegationError(PlatformError):
     def __init__(self, excess: set[str]):
         super().__init__(

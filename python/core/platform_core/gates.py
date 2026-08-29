@@ -55,3 +55,27 @@ def assert_business_switchable(state: str) -> None:
         allowed_states=BUSINESS_SWITCHABLE_STATES,
         action="switch",
     )
+
+
+# Platform standing that blocks new commercial intake (Doc 04 §6.1).
+# `under_review` is deliberately NOT here: Doc 04 §6.1 says a Business under
+# review "may still operate but is flagged". Only `suspended` blocks.
+COMMERCIAL_INTAKE_BLOCKING_STATUSES: frozenset[str] = frozenset({"suspended"})
+
+
+def assert_business_accepts_commerce(status: str, *, action: str = "create") -> None:
+    """Doc 04 §6.1: a suspended Business "cannot receive orders".
+
+    Applies to *intake* only — creating orders, bookings, and payment attempts.
+    Deliberately NOT applied to lifecycle transitions on work that already
+    exists: a suspended Business must still be able to complete, cancel, and
+    refund what its customers already paid for, or suspension would strand
+    those customers rather than the Business.
+
+    This is the standing axis (`status`), independent of the lifecycle axis
+    (`state`) checked by `assert_business_mutable` — both can apply.
+    """
+    from platform_core.exceptions import BusinessSuspended
+
+    if status in COMMERCIAL_INTAKE_BLOCKING_STATUSES:
+        raise BusinessSuspended(action=action)
