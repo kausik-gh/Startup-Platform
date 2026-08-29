@@ -118,7 +118,7 @@ async def list_bookings(
     customer_contact_id: UUID | None = Query(default=None),
     location_id: UUID | None = Query(default=None),
     provider_id: UUID | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     bookings = await BookingService.list_for_business(
@@ -140,7 +140,7 @@ async def list_bookings(
 async def create_booking(
     business_id: UUID,
     body: CreateBookingRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_CREATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_CREATE, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     booking = await BookingService.create_booking(
@@ -161,7 +161,7 @@ async def create_booking(
 async def get_booking(
     business_id: UUID,
     booking_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     booking = await BookingResolver.resolve(session, business_id=business_id, booking_id=booking_id)
@@ -176,7 +176,7 @@ async def patch_booking(
     business_id: UUID,
     booking_id: UUID,
     body: PatchBookingRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     parsed = _patch_payload(body)
@@ -201,7 +201,7 @@ async def transition_booking_status(
     business_id: UUID,
     booking_id: UUID,
     body: StatusTransitionRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     booking = await BookingLifecycleService.transition_status(
@@ -225,7 +225,7 @@ async def cancel_booking(
     business_id: UUID,
     booking_id: UUID,
     body: CancelBookingRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_CANCEL)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_CANCEL, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     booking = await BookingLifecycleService.transition_status(
@@ -249,7 +249,7 @@ async def reschedule_booking(
     business_id: UUID,
     booking_id: UUID,
     body: RescheduleRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     booking = await BookingLifecycleService.reschedule(
@@ -272,7 +272,7 @@ async def reschedule_booking(
 async def get_booking_history(
     business_id: UUID,
     booking_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     history = await BookingService.get_status_history(
@@ -288,7 +288,7 @@ async def get_booking_history(
 async def list_booking_notes(
     business_id: UUID,
     booking_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     notes = await BookingNoteService.list_for_booking(
@@ -305,7 +305,7 @@ async def create_booking_note(
     business_id: UUID,
     booking_id: UUID,
     body: CreateNoteRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     note = await BookingNoteService.create_note(
@@ -327,7 +327,7 @@ async def create_booking_note(
 async def check_booking_availability(
     business_id: UUID,
     body: AvailabilityCheckRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_MANAGE_AVAILABILITY)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_MANAGE_AVAILABILITY, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     params = validate_availability_query(body.model_dump())
@@ -343,7 +343,7 @@ async def check_booking_availability(
 @router.get("/{business_id}/bookings-policy")
 async def get_bookings_policy(
     business_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_READ, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     policy = await BookingService.get_or_create_policy(session, business_id)
@@ -368,7 +368,7 @@ async def get_bookings_policy(
 async def patch_bookings_policy(
     business_id: UUID,
     body: BookingsPolicyRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(BOOKINGS_UPDATE, "bookings")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     policy = await BookingService.update_policy(

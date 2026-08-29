@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from platform_core.db import get_database_url
 from platform_worker.claiming import claim_job_batch
@@ -24,7 +25,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         pytest.skip("DATABASE_URL not configured")
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         yield session
@@ -245,7 +246,7 @@ async def test_concurrent_job_claim_safety(db_session: AsyncSession) -> None:
     assert url
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with factory() as session_a, factory() as session_b:

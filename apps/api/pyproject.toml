@@ -25,6 +25,7 @@ platform-testing = { workspace = true }
 pythonpath = [
     "src",
     "../../python/testing",
+    "../worker/src",
 ]
 asyncio_mode = "auto"
 

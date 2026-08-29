@@ -115,6 +115,7 @@ async def resolve_request_context(
     supabase_user_id: uuid.UUID,
     email: str,
     correlation_id: str | None = None,
+    force_personal: bool = False,
 ) -> RequestContext:
     identity = await IdentityService.bootstrap_identity(session, supabase_user_id, email)
     await session.flush()
@@ -126,6 +127,21 @@ async def resolve_request_context(
     module_states: dict[str, ModuleStateInfo] = {}
 
     is_super_admin = await IdentityService.is_super_admin(session, identity.id)
+
+    if force_personal:
+        # Identity-only context for endpoints that must run before a membership
+        # exists — invitation accept/decline. Doc 12 §8.9 gate [4] cannot apply
+        # to the request that creates the membership it would check; those
+        # handlers authorise on the invitation recipient match instead.
+        await bind_session_context(session, identity.id, None)
+        return _empty_personal_context(
+            identity=identity,
+            supabase_user_id=supabase_user_id,
+            email=email,
+            is_super_admin=is_super_admin,
+            correlation_id=correlation_id,
+            request=request,
+        )
     explicit_business_header = request.headers.get("X-Business-Id") is not None
     path_business = request.path_params.get("business_id") is not None
     restored_preference = False

@@ -52,6 +52,13 @@ class PaymentAttemptService:
                 session, business_id=business_id, booking_id=source_id
             )
             return "INR", booking.customer_contact_id
+        if source_type == "membership":
+            from platform_core.resolvers.membership_resolver import MembershipResolver
+
+            enrolment = await MembershipResolver.resolve_enrolment(
+                session, business_id=business_id, enrolment_id=source_id
+            )
+            return "INR", enrolment.customer_contact_id
         raise ValidationError("Unsupported payment source")
 
     @staticmethod
@@ -94,6 +101,21 @@ class PaymentAttemptService:
             elif payment.status == "failed":
                 booking.payment_status = "pending"
             booking.version += 1
+        elif payment.source_type == "membership":
+            from platform_core.resolvers.membership_resolver import MembershipResolver
+
+            enrolment = await MembershipResolver.resolve_enrolment(
+                session, business_id=payment.business_id, enrolment_id=payment.source_id
+            )
+            if payment.status == "succeeded":
+                enrolment.payment_status = "paid"
+            elif payment.status == "pending_offline":
+                enrolment.payment_status = "pending_offline"
+            elif payment.status in {"refunded", "partially_refunded"}:
+                enrolment.payment_status = "refunded"
+            elif payment.status == "failed":
+                enrolment.payment_status = "pending"
+            enrolment.version += 1
 
     @staticmethod
     async def _publish_status(

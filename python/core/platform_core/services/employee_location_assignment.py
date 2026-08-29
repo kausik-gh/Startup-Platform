@@ -285,31 +285,35 @@ class EmployeeLocationAssignmentService:
         )
         await session.flush()
 
-        existing_dest = await session.execute(
-            select(BusinessEmployeeLocationAssignment).where(
-                BusinessEmployeeLocationAssignment.employee_id == employee_id,
-                BusinessEmployeeLocationAssignment.location_id == to_location_id,
+        existing_dest = (
+            await session.execute(
+                select(BusinessEmployeeLocationAssignment).where(
+                    BusinessEmployeeLocationAssignment.employee_id == employee_id,
+                    BusinessEmployeeLocationAssignment.location_id == to_location_id,
+                )
             )
-        )
-        if existing_dest.scalars().first():
-            raise ConflictError(
-                "Employee already assigned to destination location",
-                details={"location_id": str(to_location_id)},
-            )
+        ).scalars().first()
 
         if was_primary:
             await EmployeeLocationAssignmentService._clear_primary_assignment(
                 session, employee_id
             )
 
-        dest = BusinessEmployeeLocationAssignment(
-            business_id=business_id,
-            employee_id=employee_id,
-            location_id=to_location_id,
-            is_primary=was_primary,
-            assigned_by=actor_id,
-        )
-        session.add(dest)
+        if existing_dest is not None:
+            # Idempotent transfer: the employee is already at the destination.
+            # The source assignment has been removed; reconcile the primary flag
+            # on the assignment that already exists rather than duplicating it.
+            existing_dest.is_primary = was_primary
+        else:
+            session.add(
+                BusinessEmployeeLocationAssignment(
+                    business_id=business_id,
+                    employee_id=employee_id,
+                    location_id=to_location_id,
+                    is_primary=was_primary,
+                    assigned_by=actor_id,
+                )
+            )
         employee.version += 1
         await session.flush()
 

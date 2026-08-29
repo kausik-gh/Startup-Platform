@@ -82,7 +82,7 @@ class AvailabilityRequest(BaseModel):
 async def list_members(
     business_id: UUID,
     status: str | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     members = await WorkforceService.list_members(session, business_id, status=status)
@@ -96,7 +96,7 @@ async def list_members(
 async def create_member(
     business_id: UUID,
     body: CreateMemberRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_CREATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_CREATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payload = body.model_dump()
@@ -138,7 +138,7 @@ async def create_member(
 async def get_member(
     business_id: UUID,
     member_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     member = await WorkforceService.get_member(
@@ -185,7 +185,7 @@ async def patch_member(
     business_id: UUID,
     member_id: UUID,
     body: PatchMemberRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payload = body.model_dump(exclude_unset=True)
@@ -208,7 +208,7 @@ async def patch_member(
 async def deactivate_member(
     business_id: UUID,
     member_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_DEACTIVATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_DEACTIVATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     member = await WorkforceService.deactivate_member(
@@ -229,7 +229,7 @@ async def assign_location(
     business_id: UUID,
     member_id: UUID,
     body: AssignLocationRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     row = await WorkforceService.assign_location(
@@ -256,7 +256,7 @@ async def unassign_location(
     business_id: UUID,
     member_id: UUID,
     location_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     await WorkforceService.unassign_location(
@@ -278,7 +278,7 @@ async def associate_service(
     business_id: UUID,
     member_id: UUID,
     body: AssociateServiceRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     row = await WorkforceService.associate_service(
@@ -304,7 +304,7 @@ async def set_availability(
     member_id: UUID,
     body: AvailabilityRequest,
     actor: BusinessActorContext = Depends(
-        require_business_actor(WORKFORCE_MANAGE_AVAILABILITY)
+        require_business_actor(WORKFORCE_MANAGE_AVAILABILITY, "workforce")
     ),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:

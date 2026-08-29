@@ -134,6 +134,41 @@ class BookingService:
             if offering.price_amount is not None:
                 offering_price = float(offering.price_amount)
 
+            # Stage 6 membership gate (Doc 11 §17.6): if this class/session
+            # offering is mapped to one or more membership plans, the customer
+            # must hold an active enrolment in one of them. Offerings with no
+            # mapping keep the Stage 5 capacity-only path unchanged.
+            if validated["reservation_mode"] == "class_session":
+                from platform_core.resolvers.membership_resolver import MembershipResolver
+
+                gating_plan_ids = await MembershipResolver.offering_requires_membership(
+                    session, business_id=business_id, offering_id=offering.id
+                )
+                if gating_plan_ids:
+                    if not validated["customer_contact_id"]:
+                        raise ValidationError(
+                            "This class requires an active membership",
+                            details={
+                                "code": "membership_required",
+                                "offering_id": str(offering.id),
+                            },
+                        )
+                    has_enrolment = await MembershipResolver.has_active_enrolment(
+                        session,
+                        business_id=business_id,
+                        customer_contact_id=validated["customer_contact_id"],
+                        plan_ids=gating_plan_ids,
+                    )
+                    if not has_enrolment:
+                        raise ValidationError(
+                            "This class requires an active membership",
+                            details={
+                                "code": "membership_required",
+                                "offering_id": str(offering.id),
+                                "eligible_plan_ids": [str(p) for p in gating_plan_ids],
+                            },
+                        )
+
         if not title:
             raise ValidationError(
                 "Booking title is required",

@@ -21,6 +21,7 @@ from platform_core.services.outbox import OutboxService
 from platform_testing.db_helpers import ensure_auth_user
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -47,7 +48,7 @@ def _seed(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -181,22 +182,27 @@ def test_settings_failures(owner: tuple[dict[str, str], uuid.UUID]) -> None:
         )
         assert immutable.status_code == 422
 
-        version = client.get(f"/v1/platform/businesses/{biz}/settings", headers=headers).json()[
-            "data"
-        ]["version"]
-        stale = client.patch(
+        # Bump the version once so a genuinely stale (but valid) version exists.
+        bumped = client.patch(
             f"/v1/platform/businesses/{biz}/settings",
-            json={"version": version - 1, "regional": {"currency": "EUR"}},
+            json={"regional": {"currency": "USD"}},
             headers=headers,
         )
-        assert stale.status_code == 409
+        assert bumped.status_code == 200, bumped.text
+        current = bumped.json()["data"]["version"]
+        stale = client.patch(
+            f"/v1/platform/businesses/{biz}/settings",
+            json={"version": current - 1, "regional": {"currency": "EUR"}},
+            headers=headers,
+        )
+        assert stale.status_code == 409, stale.text
 
         async def _close() -> None:
             url = get_database_url()
             assert url
             if url.startswith("postgresql://"):
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            engine = create_async_engine(url, echo=False)
+            engine = create_async_engine(url, echo=False, poolclass=NullPool)
             factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             async with factory() as session:
                 await session.execute(
@@ -231,7 +237,7 @@ def test_settings_audit_and_outbox(owner: tuple[dict[str, str], uuid.UUID]) -> N
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = await session.execute(
@@ -260,7 +266,7 @@ async def test_settings_transaction_rollback(monkeypatch: Any) -> None:
     assert url
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     owner_id = uuid.uuid4()

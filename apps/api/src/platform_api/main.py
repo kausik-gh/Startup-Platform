@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
 from platform_core.exceptions import PlatformError
 from platform_api.errors import platform_error_handler
-from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings
+from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings, v1_platform_leads, v1_platform_memberships, v1_platform_notifications
 
 # Database lifecycle state
 db_engine = None
@@ -30,8 +30,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
 
     yield
 
+    # Clear the advertised factory before disposing its engine. Leaving a
+    # disposed engine on app.state makes get_db_session hand out sessions bound
+    # to a closed event loop and suppresses its NullPool fallback — which breaks
+    # every later bare-TestClient(app) test in the same process once any
+    # `with TestClient(app)` test has run lifespan.
+    app.state.db_session_factory = None
     if db_engine:
         await db_engine.dispose()
+    db_engine = None
+    db_session_factory = None
 
 
 app = FastAPI(
@@ -80,6 +88,9 @@ app.include_router(v1_public_bookings.router)
 app.include_router(v1_business.router)
 app.include_router(v1_team_modules.router)
 app.include_router(v1_admin.router)
+app.include_router(v1_platform_leads.router)
+app.include_router(v1_platform_memberships.router)
+app.include_router(v1_platform_notifications.router)
 
 app.add_exception_handler(PlatformError, platform_error_handler)
 

@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform_core.exceptions import ResourceNotFound, ValidationError
+from platform_core.exceptions import ModuleNotActive, ResourceNotFound, ValidationError
 from platform_core.gates import assert_business_mutable
 from platform_core.models import (
     BusinessModuleState,
@@ -41,10 +41,7 @@ class WorkforceService:
             )
         ).scalars().first()
         if state is None or state.activation_state not in ACTIVE_MODULE_STATES:
-            raise ValidationError(
-                "Workforce module is not active for this Business",
-                details={"module_id": "workforce"},
-            )
+            raise ModuleNotActive("workforce")
 
     @staticmethod
     def serialize_member(member: WorkforceMember) -> dict[str, Any]:

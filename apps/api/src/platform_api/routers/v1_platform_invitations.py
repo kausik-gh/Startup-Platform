@@ -6,7 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_api.db import get_db_session
-from platform_api.dependencies import BusinessActorContext, get_request_context, require_business_actor
+from platform_api.dependencies import (
+    BusinessActorContext,
+    get_identity_context,
+    require_business_actor,
+)
 from platform_core.context import RequestContext
 from platform_core.exceptions import ResourceNotFound
 from platform_core.permissions import TEAM_INVITE, TEAM_READ
@@ -109,7 +113,7 @@ async def resend_invitation(
 async def accept_invitation(
     business_id: UUID,
     invitation_id: UUID,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_identity_context),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     invitation, membership = await InvitationService.accept_invitation(
@@ -134,7 +138,7 @@ async def accept_invitation(
 async def decline_invitation(
     business_id: UUID,
     invitation_id: UUID,
-    ctx: RequestContext = Depends(get_request_context),
+    ctx: RequestContext = Depends(get_identity_context),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     invitation = await InvitationService.decline_invitation(

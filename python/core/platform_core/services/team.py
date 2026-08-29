@@ -382,9 +382,12 @@ class TeamService:
         if update_role:
             if role is None:
                 raise ValidationError("role is required when updating role")
+            # Doc 12 §8.9: permission gate [8] precedes resource/workflow-state
+            # gate [9]. Whether the actor may assign this role is decided before
+            # whether the target's current state permits a role change.
+            TeamService.assert_can_assign_role(actor.role, role)
             if target.status != "active":
                 raise ValidationError("Role changes require an active membership")
-            TeamService.assert_can_assign_role(actor.role, role)
             target.role = role
 
         if update_location_scope:

@@ -15,10 +15,11 @@ from platform_api.main import app
 from platform_core.db import get_database_url
 from platform_core.models import PlatformAuditEvent, PlatformOutboxEvent
 from platform_core.permissions import CUSTOMERS_READ, CUSTOMERS_UPDATE
-from platform_core.services.team import TeamService
+from platform_core.authorization.resolver import AuthorizationService
 from platform_testing.db_helpers import ensure_auth_user
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -45,7 +46,7 @@ def _seed(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -71,7 +72,14 @@ def _create_business(client: TestClient, headers: dict[str, str]) -> str:
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
-    return cast(str, resp.json()["data"]["business"]["id"])
+    business_id = cast(str, resp.json()["data"]["business"]["id"])
+    # Gate [7] (Doc 12 SS8.9): optional-module operations require an active module.
+    for module_id in ("customer-relationships",):
+        enabled = client.post(
+            f"/v1/b/{business_id}/modules/{module_id}/enable", headers=headers
+        )
+        assert enabled.status_code == 200, enabled.text
+    return business_id
 
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
@@ -172,7 +180,7 @@ def test_customer_outbox_on_create(owner: tuple[dict[str, str], uuid.UUID]) -> N
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = await session.execute(
@@ -226,10 +234,10 @@ def test_owner_has_customer_permissions(owner: tuple[dict[str, str], uuid.UUID])
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
-            perms = await TeamService.resolve_permissions(
+            perms = await AuthorizationService.effective_permissions(
                 session, uuid.UUID(business_id), owner_id
             )
             assert CUSTOMERS_READ in perms

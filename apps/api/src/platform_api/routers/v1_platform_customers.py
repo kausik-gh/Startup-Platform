@@ -70,7 +70,7 @@ async def list_customers(
     status: str | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1, max_length=120),
     location_id: UUID | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     customers = await CustomerService.list_for_business(
@@ -90,7 +90,7 @@ async def list_customers(
 async def export_customers(
     business_id: UUID,
     status: str | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_EXPORT)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_EXPORT, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     data = await CustomerService.export_customers(session, business_id, status=status)
@@ -104,7 +104,7 @@ async def export_customers(
 async def create_customer(
     business_id: UUID,
     body: CreateCustomerRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     contact = await CustomerService.create_customer(
@@ -125,7 +125,7 @@ async def create_customer(
 async def get_customer(
     business_id: UUID,
     customer_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     data = await CustomerService.get_by_id(session, business_id, customer_id)
@@ -142,7 +142,7 @@ async def patch_customer(
     business_id: UUID,
     customer_id: UUID,
     body: PatchCustomerRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payload = _patch_payload(body)
@@ -168,7 +168,7 @@ async def block_customer(
     business_id: UUID,
     customer_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     contact = await CustomerService.block_customer(
@@ -191,7 +191,7 @@ async def archive_customer(
     business_id: UUID,
     customer_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     contact = await CustomerService.archive_customer(
@@ -214,7 +214,7 @@ async def restore_customer(
     business_id: UUID,
     customer_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_UPDATE, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     contact = await CustomerService.restore_customer(
@@ -237,7 +237,7 @@ async def list_customer_timeline(
     business_id: UUID,
     customer_id: UUID,
     limit: int = Query(default=50, ge=1, le=100),
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     entries = await CustomerTimelineService.list_for_contact(
@@ -256,7 +256,7 @@ async def list_customer_timeline(
 async def list_customer_notes(
     business_id: UUID,
     customer_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_READ, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     notes = await CustomerNoteService.list_for_contact(
@@ -273,7 +273,7 @@ async def create_customer_note(
     business_id: UUID,
     customer_id: UUID,
     body: CreateNoteRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_MANAGE_NOTES)),
+    actor: BusinessActorContext = Depends(require_business_actor(CUSTOMERS_MANAGE_NOTES, "customer-relationships")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     note = await CustomerNoteService.create_note(

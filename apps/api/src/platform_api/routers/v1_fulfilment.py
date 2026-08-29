@@ -54,7 +54,7 @@ class JobStatusRequest(BaseModel):
 @router.get("/{business_id}/fulfilment/settings")
 async def get_settings(
     business_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     settings = await FulfilmentService.ensure_settings(session, business_id)
@@ -72,7 +72,7 @@ async def get_settings(
 async def update_settings(
     business_id: UUID,
     body: SettingsUpdateRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_MANAGE_CONFIG)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_MANAGE_CONFIG, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     settings = await FulfilmentService.update_settings(
@@ -92,7 +92,7 @@ async def update_settings(
 async def create_zone(
     business_id: UUID,
     body: ZoneCreateRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_MANAGE_CONFIG)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_MANAGE_CONFIG, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     zone = await FulfilmentService.create_zone(
@@ -112,7 +112,7 @@ async def create_zone(
 @router.get("/{business_id}/fulfilment/zones")
 async def list_zones(
     business_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     zones = await FulfilmentService.list_zones(session, business_id)
@@ -127,7 +127,7 @@ async def list_jobs(
     business_id: UUID,
     status: str | None = Query(default=None),
     mode: str | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     jobs = await FulfilmentService.list_jobs(
@@ -143,7 +143,7 @@ async def list_jobs(
 async def get_job(
     business_id: UUID,
     job_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_READ, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     job = await FulfilmentService.get_job(session, business_id=business_id, job_id=job_id)
@@ -158,7 +158,7 @@ async def update_job_status(
     business_id: UUID,
     job_id: UUID,
     body: JobStatusRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_UPDATE_STATUS)),
+    actor: BusinessActorContext = Depends(require_business_actor(FULFILMENT_UPDATE_STATUS, "fulfilment")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     job = await FulfilmentService.transition_status(

@@ -82,7 +82,7 @@ async def list_payments(
     status: str | None = Query(default=None),
     source_type: str | None = Query(default=None),
     source_id: UUID | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payments = await PaymentAttemptService.list_for_business(
@@ -101,7 +101,7 @@ async def list_payments(
 @router.get("/{business_id}/payments/export")
 async def export_payments(
     business_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_EXPORT)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_EXPORT, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     rows = await PaymentAttemptService.export_payments(session, business_id)
@@ -115,7 +115,7 @@ async def export_payments(
 async def get_merchant_connection(
     business_id: UUID,
     provider: str = Query(default="stub"),
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     connection = await MerchantService.get_connection(
@@ -131,7 +131,7 @@ async def get_merchant_connection(
 async def upsert_merchant_connection(
     business_id: UUID,
     body: MerchantConnectionRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_MANAGE_CONNECTION)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_MANAGE_CONNECTION, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     connection = await MerchantService.upsert_connection(
@@ -152,7 +152,7 @@ async def upsert_merchant_connection(
 async def create_payment(
     business_id: UUID,
     body: CreatePaymentRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     await _require_payment_create_permission(actor, session, body.source_type)
@@ -174,7 +174,7 @@ async def create_payment(
 async def get_payment(
     business_id: UUID,
     payment_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payment = await PaymentResolver.resolve_attempt(
@@ -191,7 +191,7 @@ async def record_offline_settlement(
     business_id: UUID,
     payment_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payment = await PaymentAttemptService.record_offline_settlement(
@@ -214,7 +214,7 @@ async def create_refund(
     business_id: UUID,
     payment_id: UUID,
     body: RefundPaymentRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_REFUND)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_REFUND, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     refund, payment = await RefundService.create_refund(
@@ -240,7 +240,7 @@ async def create_refund(
 async def list_refunds(
     business_id: UUID,
     payment_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(PAYMENTS_READ, "payments")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     refunds = await RefundService.list_for_payment(

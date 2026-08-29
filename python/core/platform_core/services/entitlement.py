@@ -49,17 +49,24 @@ class ModuleService:
         )
         state = result.scalars().first()
         now = datetime.now(timezone.utc)
+        # Doc 12 SS9.1: enabled -> (configuring -> ready, only "if configuration
+        # required") -> active. No First Launch module declares a configuration
+        # schema, so enabling completes the transition to `active`; leaving the
+        # module in `enabled` would strand it permanently short of
+        # ModuleStateInfo.is_operational() and deny gate [7] forever.
         if state is None:
             state = BusinessModuleState(
                 business_id=business_id,
                 module_id=module_id,
-                activation_state="enabled",
+                activation_state="active",
                 enabled_at=now,
+                activated_at=now,
             )
             session.add(state)
         else:
-            state.activation_state = "enabled"
+            state.activation_state = "active"
             state.enabled_at = now
+            state.activated_at = now
             state.deactivated_at = None
         await session.flush()
         await AuditService.record(

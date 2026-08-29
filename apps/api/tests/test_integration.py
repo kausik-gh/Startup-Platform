@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from platform_core.db import get_database_url
 from platform_core.models import BusinessMembership, PlatformOutboxEvent
@@ -20,7 +21,7 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         pytest.skip("DATABASE_URL not configured")
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with factory() as session:
         yield session

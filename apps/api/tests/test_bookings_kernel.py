@@ -17,6 +17,7 @@ from platform_core.models import PlatformAuditEvent, PlatformOutboxEvent
 from platform_testing.db_helpers import ensure_auth_user
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -43,7 +44,7 @@ def _seed(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -62,6 +63,14 @@ def owner(monkeypatch: Any) -> tuple[dict[str, str], uuid.UUID]:
     return _headers(user_id, email), user_id
 
 
+def _enable_booking_modules(
+    client: TestClient, headers: dict[str, str], business_id: str
+) -> None:
+    for mid in ("workforce", "bookings", "offerings-catalog", "payments"):
+        resp = client.post(f"/v1/b/{business_id}/modules/{mid}/enable", headers=headers)
+        assert resp.status_code == 200, resp.text
+
+
 def _create_business(client: TestClient, headers: dict[str, str]) -> str:
     resp = client.post(
         "/v1/platform/businesses",
@@ -69,7 +78,10 @@ def _create_business(client: TestClient, headers: dict[str, str]) -> str:
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
-    return cast(str, resp.json()["data"]["business"]["id"])
+    business_id = cast(str, resp.json()["data"]["business"]["id"])
+    # Gate [7] (Doc 12 SS8.9): optional-module operations require an active module.
+    _enable_booking_modules(client, headers, business_id)
+    return business_id
 
 
 def _primary_location_id(client: TestClient, headers: dict[str, str], business_id: str) -> str:
@@ -142,14 +154,6 @@ def test_booking_lifecycle(owner: tuple[dict[str, str], uuid.UUID]) -> None:
     )
     assert history_resp.status_code == 200, history_resp.text
     assert history_resp.json()["meta"]["count"] >= 4
-
-
-def _enable_booking_modules(
-    client: TestClient, headers: dict[str, str], business_id: str
-) -> None:
-    for mid in ("workforce", "bookings", "offerings-catalog", "payments"):
-        resp = client.post(f"/v1/b/{business_id}/modules/{mid}/enable", headers=headers)
-        assert resp.status_code == 200, resp.text
 
 
 def _create_provider(
@@ -519,7 +523,7 @@ def test_booking_audit_and_outbox(owner: tuple[dict[str, str], uuid.UUID]) -> No
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = await session.execute(

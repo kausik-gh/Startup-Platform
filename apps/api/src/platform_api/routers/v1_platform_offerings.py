@@ -107,7 +107,7 @@ async def list_categories(
     business_id: UUID,
     status: str | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1, max_length=120),
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     categories = await CategoryService.list_for_business(
@@ -123,7 +123,7 @@ async def list_categories(
 async def create_category(
     business_id: UUID,
     body: CreateCategoryRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_CREATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_CREATE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     category = await CategoryService.create_category(
@@ -144,7 +144,7 @@ async def create_category(
 async def get_category(
     business_id: UUID,
     category_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     category = await OfferingResolver.resolve_category(
@@ -161,7 +161,7 @@ async def patch_category(
     business_id: UUID,
     category_id: UUID,
     body: PatchCategoryRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     parsed = _patch_payload(body)
@@ -186,7 +186,7 @@ async def archive_category(
     business_id: UUID,
     category_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_ARCHIVE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_ARCHIVE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     category = await CategoryService.archive_category(
@@ -211,7 +211,7 @@ async def list_products(
     search: str | None = Query(default=None, min_length=1, max_length=120),
     category_id: UUID | None = Query(default=None),
     track_inventory: bool | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     offerings = await OfferingService.list_for_business(
@@ -232,7 +232,7 @@ async def list_products(
 async def create_product(
     business_id: UUID,
     body: CreateProductRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_CREATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_CREATE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     offering = await OfferingService.create_offering(
@@ -253,7 +253,7 @@ async def create_product(
 async def get_product(
     business_id: UUID,
     product_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     offering = await OfferingResolver.resolve(
@@ -270,7 +270,7 @@ async def patch_product(
     business_id: UUID,
     product_id: UUID,
     body: PatchProductRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     parsed = _patch_payload(body)
@@ -295,7 +295,7 @@ async def archive_product(
     business_id: UUID,
     product_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_ARCHIVE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_ARCHIVE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     offering = await OfferingService.archive_offering(
@@ -318,7 +318,7 @@ async def restore_product(
     business_id: UUID,
     product_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     offering = await OfferingService.restore_offering(
@@ -340,7 +340,7 @@ async def restore_product(
 async def list_variants(
     business_id: UUID,
     product_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_READ, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     variants = await OfferingService.list_variants(
@@ -357,7 +357,7 @@ async def create_variant(
     business_id: UUID,
     product_id: UUID,
     body: CreateVariantRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(OFFERINGS_UPDATE, "offerings-catalog")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     variant = await OfferingService.create_variant(

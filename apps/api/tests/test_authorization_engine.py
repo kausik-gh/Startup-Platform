@@ -22,6 +22,7 @@ from platform_core.services.team import TeamService
 from platform_testing.db_helpers import ensure_auth_user
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -48,7 +49,7 @@ def _seed(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -123,7 +124,7 @@ def test_authorization_decision(owner: tuple[dict[str, str], uuid.UUID]) -> None
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             allowed = await AuthorizationService.authorize(
@@ -203,7 +204,7 @@ def test_resolver_determinism_and_team_delegate(owner: tuple[dict[str, str], uui
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             first = await PermissionEngineService.get_effective_permissions(
@@ -241,17 +242,22 @@ def test_member_grant_override(owner: tuple[dict[str, str], uuid.UUID]) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
+            from platform_core.services.business import BusinessService
             from platform_core.services.invitation import InvitationService
 
+            business = await BusinessService.get_by_id(session, uuid.UUID(biz))
+            owner_membership = await TeamService.get_active_membership(
+                session, owner_id, uuid.UUID(biz)
+            )
             invitation = await InvitationService.create_invitation(
                 session,
-                business_id=uuid.UUID(biz),
+                business=business,
+                actor=owner_membership,
                 invited_email=f"{member_id}@example.com",
                 invited_role="member",
-                invited_by=owner_id,
                 correlation_id=str(uuid.uuid4()),
             )
             await InvitationService.accept_invitation(
@@ -287,7 +293,7 @@ def test_member_grant_override(owner: tuple[dict[str, str], uuid.UUID]) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = await session.execute(

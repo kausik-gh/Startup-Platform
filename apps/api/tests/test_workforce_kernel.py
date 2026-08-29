@@ -17,6 +17,7 @@ from platform_core.models import PlatformAuditEvent, PlatformOutboxEvent
 from platform_testing.db_helpers import ensure_auth_user
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -43,7 +44,7 @@ def _seed(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -212,7 +213,7 @@ def test_workforce_audit_and_outbox(owner: tuple[dict[str, str], uuid.UUID]) -> 
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = await session.execute(

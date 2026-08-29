@@ -16,6 +16,7 @@ class OutboxService:
         business_id: uuid.UUID | None = None,
         correlation_id: str | None = None,
         causation_id: uuid.UUID | None = None,
+        skip_notifications: bool = False,
     ) -> PlatformOutboxEvent:
         event = PlatformOutboxEvent(
             business_id=business_id,
@@ -27,4 +28,20 @@ class OutboxService:
         )
         session.add(event)
         await session.flush()
+
+        # Core Notifications fan-out (Stage 7). Every notification-worthy event
+        # already passes through here, so dispatch hooks in once instead of being
+        # duplicated across every emitting service. Imported lazily: the
+        # dispatcher imports NotificationService, which imports BusinessService,
+        # which would otherwise cycle back through this module.
+        if not skip_notifications:
+            from platform_core.services.notification_dispatch import NotificationDispatcher
+
+            await NotificationDispatcher.dispatch(
+                session,
+                event_type=event_type,
+                payload=payload,
+                business_id=business_id,
+                correlation_id=correlation_id,
+            )
         return event

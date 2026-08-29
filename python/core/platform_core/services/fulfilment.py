@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform_core.exceptions import ResourceNotFound, ValidationError
+from platform_core.exceptions import ModuleNotActive, ResourceNotFound, ValidationError
 from platform_core.gates import assert_business_mutable
 from platform_core.models import (
     BusinessModuleState,
@@ -109,10 +109,7 @@ class FulfilmentService:
             )
         ).scalars().first()
         if state is None or state.activation_state not in ACTIVE_MODULE_STATES:
-            raise ValidationError(
-                "Fulfilment module is not active for this Business",
-                details={"module_id": "fulfilment"},
-            )
+            raise ModuleNotActive("fulfilment")
 
     @staticmethod
     async def ensure_settings(

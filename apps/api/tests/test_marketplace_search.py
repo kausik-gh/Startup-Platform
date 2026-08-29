@@ -18,6 +18,7 @@ from platform_testing.db_helpers import ensure_auth_user
 from platform_worker.job_runner import poll_and_execute_jobs
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -44,7 +45,7 @@ def _seed(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -69,7 +70,7 @@ def _drain_website_jobs(business_id: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             for _ in range(5):
@@ -180,7 +181,7 @@ def test_query_time_eligibility_blocks_stale_projection(
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await session.execute(
@@ -212,17 +213,29 @@ def test_location_refinement(owner: tuple[dict[str, str], uuid.UUID]) -> None:
     unique = f"CityBiz-{uuid.uuid4().hex[:6]}"
     business = _create_discoverable(client, headers, name=unique)
     bid = business["id"]
-    loc = client.post(
+    # Business creation already provisions the primary location; a second
+    # primary POST correctly conflicts.
+    dup_primary = client.post(
         f"/v1/platform/businesses/{bid}/locations",
+        json={"name": "Main", "is_primary": True},
+        headers=headers,
+    )
+    assert dup_primary.status_code == 409, dup_primary.text
+
+    # Refine the existing primary location with the city under test.
+    locations = client.get(
+        f"/v1/platform/businesses/{bid}/locations", headers=headers
+    ).json()["data"]
+    primary_loc_id = next(loc["id"] for loc in locations if loc["is_primary"])
+    refined = client.patch(
+        f"/v1/platform/businesses/{bid}/locations/{primary_loc_id}",
         json={
-            "name": "Main",
-            "is_primary": True,
             "address": {"city": "PuneTestCity", "line1": "1 Main St"},
             "timezone": "Asia/Kolkata",
         },
         headers=headers,
     )
-    assert loc.status_code == 200, loc.text
+    assert refined.status_code == 200, refined.text
     # Re-index after location update (API may emit location.created; call service path via opt visibility toggle no-op or reindex)
     from platform_core.services.marketplace_indexing import MarketplaceIndexingService
 
@@ -231,7 +244,7 @@ def test_location_refinement(owner: tuple[dict[str, str], uuid.UUID]) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await MarketplaceIndexingService.reindex_business(

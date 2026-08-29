@@ -120,6 +120,28 @@ KNOWN_HANDLERS = {
     "permission.granted",
     "module.enabled",
     "module.deactivated",
+    # Stage 6 — Leads
+    "lead.created",
+    "lead.updated",
+    "lead.assigned",
+    "lead.deleted",
+    "lead.stage_changed",
+    "lead.contacted",
+    "lead.qualified",
+    "lead.won",
+    "lead.lost",
+    "lead.note.created",
+    # Stage 6 — Memberships
+    "membership.plan.created",
+    "membership.plan.updated",
+    "membership.plan.archived",
+    "membership.enrolled",
+    "membership.enrolment.updated",
+    "membership.enrolment.activated",
+    "membership.enrolment.paused",
+    "membership.enrolment.expired",
+    "membership.enrolment.cancelled",
+    "membership.enrolment.completed",
 }
 
 # Events that trigger Marketplace projection re-index (Doc 12 §14.5).

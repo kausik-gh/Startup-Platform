@@ -22,6 +22,7 @@ from platform_core.services.team import TeamService
 from platform_testing.db_helpers import ensure_auth_user
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 TEST_JWT_SECRET = "super-secret-jwt-token-with-at-least-32-characters-long"
 
@@ -48,7 +49,7 @@ def _seed_user(user_id: uuid.UUID, email: str) -> None:
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             await ensure_auth_user(session, user_id, email)
@@ -234,7 +235,11 @@ def test_transfer_ownership(owner_pair: tuple[dict[str, str], uuid.UUID]) -> Non
         assert data["former_owner"]["identity_id"] == str(owner_id)
         assert data["primary_owner_identity_id"] == str(manager_id)
 
-        listed = client.get(f"/v1/platform/businesses/{biz}/members", headers=headers)
+        # The former owner is demoted; re-verify the role swap as the new owner.
+        new_owner_headers = _headers(manager_id, manager_email)
+        listed = client.get(
+            f"/v1/platform/businesses/{biz}/members", headers=new_owner_headers
+        )
         roles = {m["identity_id"]: m["role"] for m in listed.json()["data"]}
         assert roles[str(manager_id)] == "primary_owner"
         assert roles[str(owner_id)] == "manager"
@@ -383,7 +388,7 @@ def test_closed_business_blocks_membership_mutations(
             assert url
             if url.startswith("postgresql://"):
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            engine = create_async_engine(url, echo=False)
+            engine = create_async_engine(url, echo=False, poolclass=NullPool)
             factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             async with factory() as session:
                 await session.execute(
@@ -422,7 +427,7 @@ def test_membership_audit_and_outbox(owner_pair: tuple[dict[str, str], uuid.UUID
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        engine = create_async_engine(url, echo=False)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = await session.execute(
@@ -451,7 +456,7 @@ async def test_membership_transaction_rollback(monkeypatch: Any) -> None:
     assert url
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     owner_id = uuid.uuid4()
@@ -526,23 +531,20 @@ async def test_concurrent_ownership_transfer() -> None:
     assert url
     if url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     owner_id = uuid.uuid4()
     target_a = uuid.uuid4()
     target_b = uuid.uuid4()
-    for uid, label in (
-        (owner_id, "owner"),
-        (target_a, "a"),
-        (target_b, "b"),
-    ):
-        email = f"conc-{label}-{uid.hex[:6]}@test.local"
+    for uid, label in ((owner_id, "owner"), (target_a, "a"), (target_b, "b")):
         async with factory() as session:
+            email = f"conc-{label}-{uid.hex[:6]}@test.local"
             await ensure_auth_user(session, uid, email)
-            if label == "owner":
-                await IdentityService.bootstrap_identity(session, uid, email)
+            await IdentityService.bootstrap_identity(session, uid, email)
             await session.commit()
+
+    async with factory() as session:
         business, _, _, _ = await BusinessService.create_business(
             session,
             identity_id=owner_id,
@@ -550,28 +552,26 @@ async def test_concurrent_ownership_transfer() -> None:
             business_type="retail",
             correlation_id=str(uuid.uuid4()),
         )
-        mid_a = (
-            await TeamService.invite_member(
-                session,
-                business_id=business.id,
-                identity_id=target_a,
-                role="manager",
-                invited_by=owner_id,
-            )
+        mid_a = await TeamService.invite_member(
+            session,
+            business_id=business.id,
+            identity_id=target_a,
+            role="manager",
+            invited_by=owner_id,
         )
-        mid_b = (
-            await TeamService.invite_member(
-                session,
-                business_id=business.id,
-                identity_id=target_b,
-                role="member",
-                invited_by=owner_id,
-            )
+        mid_b = await TeamService.invite_member(
+            session,
+            business_id=business.id,
+            identity_id=target_b,
+            role="member",
+            invited_by=owner_id,
         )
         await TeamService.activate_membership(session, mid_a)
         await TeamService.activate_membership(session, mid_b)
         await session.commit()
         business_id = business.id
+        mid_a_id = mid_a.id
+        mid_b_id = mid_b.id
 
     async def _transfer(target_mid: uuid.UUID) -> None:
         async with factory() as session:
@@ -585,8 +585,8 @@ async def test_concurrent_ownership_transfer() -> None:
             await session.commit()
 
     results = await asyncio.gather(
-        _transfer(mid_a.id),
-        _transfer(mid_b.id),
+        _transfer(mid_a_id),
+        _transfer(mid_b_id),
         return_exceptions=True,
     )
     successes = [r for r in results if r is None]

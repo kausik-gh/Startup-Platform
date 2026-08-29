@@ -86,7 +86,7 @@ async def list_orders(
     search: str | None = Query(default=None, min_length=1, max_length=120),
     customer_contact_id: UUID | None = Query(default=None),
     location_id: UUID | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     orders = await OrderService.list_for_business(
@@ -107,7 +107,7 @@ async def list_orders(
 async def create_order(
     business_id: UUID,
     body: CreateOrderRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_CREATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_CREATE, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     order = await OrderService.create_order(
@@ -129,7 +129,7 @@ async def create_order(
 async def get_order(
     business_id: UUID,
     order_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     order = await OrderResolver.resolve(session, business_id=business_id, order_id=order_id)
@@ -145,7 +145,7 @@ async def patch_order(
     business_id: UUID,
     order_id: UUID,
     body: PatchOrderRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     parsed = _patch_payload(body)
@@ -171,7 +171,7 @@ async def transition_order_status(
     business_id: UUID,
     order_id: UUID,
     body: StatusTransitionRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     order = await OrderLifecycleService.transition_status(
@@ -196,7 +196,7 @@ async def cancel_order(
     business_id: UUID,
     order_id: UUID,
     body: CancelOrderRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_CANCEL)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_CANCEL, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     order = await OrderLifecycleService.transition_status(
@@ -221,7 +221,7 @@ async def complete_order(
     business_id: UUID,
     order_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     order = await OrderLifecycleService.transition_status(
@@ -245,7 +245,7 @@ async def complete_order(
 async def get_order_history(
     business_id: UUID,
     order_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     history = await OrderService.get_status_history(
@@ -261,7 +261,7 @@ async def get_order_history(
 async def list_order_notes(
     business_id: UUID,
     order_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_READ, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     notes = await OrderNoteService.list_for_order(
@@ -278,7 +278,7 @@ async def create_order_note(
     business_id: UUID,
     order_id: UUID,
     body: CreateNoteRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS)),
+    actor: BusinessActorContext = Depends(require_business_actor(ORDERS_UPDATE_STATUS, "orders")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     note = await OrderNoteService.create_note(

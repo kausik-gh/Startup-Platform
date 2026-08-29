@@ -38,13 +38,34 @@ class BusinessActorContext:
     actor_membership: BusinessMembership
 
 
+def assert_entitled(ctx: RequestContext, module_id: str) -> None:
+    """Gate [6] — Commercial Entitlement (Doc 12 SS8.9)."""
+    if not ctx.effective_entitlements.is_entitled(module_id):
+        raise EntitlementRequired(module_id)
+
+
+def assert_module_operational(ctx: RequestContext, module_id: str) -> None:
+    """Gate [7] — module enabled + configured + applicable (Doc 12 SS8.9)."""
+    state = ctx.module_states.get(module_id)
+    if state is None or not state.is_operational():
+        raise ModuleNotActive(module_id)
+
+
 async def resolve_business_actor(
     business_id: uuid.UUID,
     permission: str,
     ctx: RequestContext,
     session: AsyncSession,
+    module_id: str | None = None,
 ) -> BusinessActorContext:
-    """Resolve active membership and permission against a path business_id."""
+    """Resolve active membership and permission against a path business_id.
+
+    Runs the Doc 12 SS8.9 gate chain in canonical order: [3] Business exists ->
+    [4] membership active -> [6] Entitlement -> [7] module state -> [8] permission.
+    `module_id` is supplied only for genuine optional modules; Platform Core
+    groups are auto-granted and auto-activated at Business creation and are
+    deliberately outside the optional-module Entitlement/activation path.
+    """
     from platform_core.authorization.resolver import AuthorizationService
 
     business = await BusinessService.get_by_id(session, business_id)
@@ -53,6 +74,9 @@ async def resolve_business_actor(
     membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
     if membership is None:
         raise MembershipRequired()
+    if module_id is not None:
+        assert_entitled(ctx, module_id)
+        assert_module_operational(ctx, module_id)
     decision = await AuthorizationService.authorize(
         session,
         business_id=business_id,
@@ -64,13 +88,58 @@ async def resolve_business_actor(
     return BusinessActorContext(request=ctx, business=business, actor_membership=membership)
 
 
-def require_business_actor(permission: str) -> Callable[..., Coroutine[Any, Any, BusinessActorContext]]:
+def require_business_actor(
+    permission: str, module_id: str | None = None
+) -> Callable[..., Coroutine[Any, Any, BusinessActorContext]]:
     async def check(
         business_id: uuid.UUID,
         ctx: RequestContext = Depends(get_request_context),
         session: AsyncSession = Depends(get_db_session),
     ) -> BusinessActorContext:
-        return await resolve_business_actor(business_id, permission, ctx, session)
+        return await resolve_business_actor(business_id, permission, ctx, session, module_id)
+
+    return check
+
+
+async def resolve_business_member(
+    business_id: uuid.UUID,
+    ctx: RequestContext,
+    session: AsyncSession,
+) -> BusinessActorContext:
+    """Gate chain [3] Business exists -> [4] membership active, and STOP.
+
+    Deliberately omits gate [8] permission. Use ONLY for endpoints whose entire
+    result set is the calling identity's own personal data, where the identity
+    scope is applied by the handler itself and no path/query parameter can widen
+    it (Core Notifications inbox: list, unread-count, mark-read, mark-all-read).
+
+    A member must be able to read notifications addressed to them — an invitee
+    or a lead assignee holds no explicit grants at the moment their notification
+    is created, and AUD-07 (manager/member roles carry no default permissions)
+    means role defaults will not supply one. Gating a personal inbox behind a
+    delegated permission makes those notifications structurally undeliverable.
+    What *reaches* an inbox is still permission-gated per resource at fan-out
+    (NotificationService.resolve_recipients), so this does not widen access to
+    Business data. Anything reading another identity's data keeps gate [8].
+    """
+    business = await BusinessService.get_by_id(session, business_id)
+    if not business:
+        raise ResourceNotFound("Business")
+    membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
+    if membership is None:
+        raise MembershipRequired()
+    return BusinessActorContext(request=ctx, business=business, actor_membership=membership)
+
+
+def require_business_member() -> Callable[..., Coroutine[Any, Any, BusinessActorContext]]:
+    """Membership-only dependency — see `resolve_business_member` for the rules."""
+
+    async def check(
+        business_id: uuid.UUID,
+        ctx: RequestContext = Depends(get_request_context),
+        session: AsyncSession = Depends(get_db_session),
+    ) -> BusinessActorContext:
+        return await resolve_business_member(business_id, ctx, session)
 
     return check
 
@@ -116,6 +185,25 @@ async def get_request_context(
     )
 
 
+async def get_identity_context(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+    jwt_payload: dict[str, Any] = Depends(verify_jwt_payload),
+    x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
+) -> RequestContext:
+    """Identity-only context for endpoints that precede membership creation
+    (invitation accept/decline). Skips gate [4]; the handler authorises on the
+    invitation recipient match instead."""
+    return await resolve_request_context(
+        request,
+        session,
+        supabase_user_id=uuid.UUID(jwt_payload["sub"]),
+        email=jwt_payload["email"],
+        correlation_id=x_correlation_id,
+        force_personal=True,
+    )
+
+
 def require_permission(permission: str) -> ContextDependency:
     async def check(ctx: RequestContext = Depends(get_request_context)) -> RequestContext:
         if permission not in ctx.effective_permissions:
@@ -127,8 +215,7 @@ def require_permission(permission: str) -> ContextDependency:
 
 def require_entitlement(module_id: str) -> ContextDependency:
     async def check(ctx: RequestContext = Depends(get_request_context)) -> RequestContext:
-        if not ctx.effective_entitlements.is_entitled(module_id):
-            raise EntitlementRequired(module_id)
+        assert_entitled(ctx, module_id)
         return ctx
 
     return check
@@ -136,9 +223,7 @@ def require_entitlement(module_id: str) -> ContextDependency:
 
 def require_active_module(module_id: str) -> ContextDependency:
     async def check(ctx: RequestContext = Depends(get_request_context)) -> RequestContext:
-        state = ctx.module_states.get(module_id)
-        if state is None or not state.is_operational():
-            raise ModuleNotActive(module_id)
+        assert_module_operational(ctx, module_id)
         return ctx
 
     return check

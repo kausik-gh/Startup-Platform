@@ -49,7 +49,7 @@ async def list_inventory(
     offering_id: UUID | None = Query(default=None),
     stock_status: str | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1, max_length=120),
-    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_READ, "inventory")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     records = await InventoryService.list_for_business(
@@ -70,7 +70,7 @@ async def list_inventory(
 async def export_inventory(
     business_id: UUID,
     location_id: UUID | None = Query(default=None),
-    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_EXPORT)),
+    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_EXPORT, "inventory")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     data = await InventoryService.export_inventory(
@@ -86,7 +86,7 @@ async def export_inventory(
 async def adjust_inventory(
     business_id: UUID,
     body: AdjustInventoryRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_ADJUST)),
+    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_ADJUST, "inventory")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     record = await InventoryService.adjust_stock(
@@ -108,7 +108,7 @@ async def adjust_inventory(
 async def set_opening_stock(
     business_id: UUID,
     body: OpeningStockRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_ADJUST)),
+    actor: BusinessActorContext = Depends(require_business_actor(INVENTORY_ADJUST, "inventory")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     record = await InventoryService.set_opening_stock(

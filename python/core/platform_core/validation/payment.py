@@ -70,11 +70,6 @@ def validate_create_payment_payload(raw: dict[str, Any]) -> dict[str, Any]:
             "Invalid payment source type",
             details={"errors": [_field_error("source_type", "Unsupported source")]},
         )
-    if source_type == "membership":
-        raise ValidationError(
-            "Membership payment linkage is not available until memberships module ships",
-            details={"source_type": source_type},
-        )
     payment_method = str(raw.get("payment_method") or "online").strip().lower()
     if payment_method not in PAYMENT_METHODS:
         raise ValidationError(

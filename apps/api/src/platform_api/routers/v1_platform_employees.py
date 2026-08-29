@@ -83,7 +83,7 @@ async def list_employees(
     business_id: UUID,
     status: str | None = Query(default=None),
     search: str | None = Query(default=None, min_length=1, max_length=120),
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     employees = await EmployeeService.list_for_business(
@@ -99,7 +99,7 @@ async def list_employees(
 async def create_employee(
     business_id: UUID,
     body: CreateEmployeeRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_CREATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_CREATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     employee = await EmployeeService.create_employee(
@@ -123,7 +123,7 @@ async def create_employee(
 async def get_employee(
     business_id: UUID,
     employee_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     data = await EmployeeService.get_by_id(
@@ -142,7 +142,7 @@ async def patch_employee(
     business_id: UUID,
     employee_id: UUID,
     body: PatchEmployeeRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     payload = _patch_payload(body)
@@ -168,7 +168,7 @@ async def deactivate_employee(
     business_id: UUID,
     employee_id: UUID,
     body: VersionedBody,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_DEACTIVATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_DEACTIVATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     employee = await EmployeeService.deactivate_employee(
@@ -190,7 +190,7 @@ async def deactivate_employee(
 async def list_employee_locations(
     business_id: UUID,
     employee_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_READ, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     await EmployeeResolver.resolve(session, business_id=business_id, employee_id=employee_id)
@@ -208,7 +208,7 @@ async def assign_employee_location(
     business_id: UUID,
     employee_id: UUID,
     body: AssignLocationRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     assignment = await EmployeeLocationAssignmentService.assign(
@@ -232,7 +232,7 @@ async def remove_employee_location(
     business_id: UUID,
     employee_id: UUID,
     location_id: UUID,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     await EmployeeLocationAssignmentService.remove(
@@ -252,7 +252,7 @@ async def transfer_employee(
     business_id: UUID,
     employee_id: UUID,
     body: TransferEmployeeRequest,
-    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE)),
+    actor: BusinessActorContext = Depends(require_business_actor(WORKFORCE_UPDATE, "workforce")),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict[str, Any]:
     employee = await EmployeeLocationAssignmentService.transfer(
