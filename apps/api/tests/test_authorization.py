@@ -131,7 +131,15 @@ def test_primary_owner_can_access_own_business(
 
         get_resp = client.get(f"/v1/b/{business_id}", headers=auth_headers)
         assert get_resp.status_code == 200
-        assert get_resp.json()["data"]["display_name"] == "My Shop"
+        body = get_resp.json()["data"]
+        assert body["display_name"] == "My Shop"
+        # All three independent axes are exposed (Doc 03 §1.6). `status` in
+        # particular is what the Workspace Home reads to render the commercial
+        # recovery state — without it the UI cannot distinguish a suspended
+        # Business from a healthy one.
+        assert body["state"] in {"draft", "onboarding", "active", "dormant", "closed"}
+        assert body["status"] == "in_good_standing"
+        assert body["visibility"] in {"private", "unlisted", "discoverable"}
 
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required for integration")

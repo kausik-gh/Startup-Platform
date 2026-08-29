@@ -48,7 +48,13 @@ async def get_business(
             "id": str(business.id),
             "slug": business.slug,
             "display_name": business.display_name,
+            # Three independent axes (Doc 03 §1.6): `state` is lifecycle,
+            # `status` is platform standing, `visibility` is public exposure.
+            # `status` is what the Workspace Home reads to render the commercial
+            # recovery state (Doc 09 CORE-001); without it the UI cannot tell a
+            # suspended Business from a healthy one.
             "state": business.state,
+            "status": business.status,
             "visibility": business.visibility,
         },
         "meta": {"correlation_id": ctx.correlation_id},
