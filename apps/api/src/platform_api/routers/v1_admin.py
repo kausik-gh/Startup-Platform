@@ -15,6 +15,7 @@ from platform_api.dependencies import require_super_admin
 from platform_core.context import RequestContext
 from platform_core.exceptions import ResourceNotFound
 from platform_core.models import MarketplaceIndexHealth
+from platform_core.services.admin_support import AdminSupportService
 from platform_core.services.audit import AuditService
 from platform_core.services.business import BusinessService
 from platform_core.services.marketplace_indexing import MarketplaceIndexingService
@@ -158,3 +159,111 @@ async def admin_reindex_business(
     )
     await session.commit()
     return {"data": result, "meta": {"correlation_id": ctx.correlation_id}}
+
+
+# ---------------------------------------------------------------------------
+# ADM-002 / ADM-003 / ADM-008 / ADM-018 / ADM-019
+#
+# Doc 11 §17.7 exit: "Admin can inspect and support without silent
+# impersonation". Every route below that reads one identified Business writes
+# an `admin.*` audit event with actor_context="admin" BEFORE returning, so an
+# Admin cannot look at a Business without leaving a trace, and the trace is
+# never attributed to the Business owner.
+# ---------------------------------------------------------------------------
+@router.get("/businesses")
+async def admin_search_businesses(
+    query: str | None = Query(default=None, min_length=1, max_length=120),
+    state: str | None = Query(default=None),
+    business_status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    ctx: RequestContext = Depends(require_super_admin()),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """ADM-002 — search across all Businesses.
+
+    Not audited per-Business: this is a list view over metadata the Admin is
+    entitled to see, and auditing every keystroke of a search box produces
+    noise that buries the inspections that matter.
+    """
+    results = await AdminSupportService.search_businesses(
+        session, query=query, state=state, status=business_status, limit=limit
+    )
+    return {
+        "data": results,
+        "meta": {"correlation_id": ctx.correlation_id, "count": len(results)},
+    }
+
+
+@router.get("/businesses/{business_id}/support")
+async def admin_business_support_view(
+    business_id: UUID,
+    ctx: RequestContext = Depends(require_super_admin()),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """ADM-003 + ADM-008 — the support hub for one Business, attributed."""
+    view = await AdminSupportService.business_support_view(session, business_id=business_id)
+    if view is None:
+        raise ResourceNotFound("Business")
+
+    await AuditService.record(
+        session,
+        event_type="admin.business.support_viewed",
+        actor_identity_id=ctx.identity_id,
+        actor_context="admin",
+        business_id=business_id,
+        resource_type="business",
+        resource_id=business_id,
+        action="support_view",
+        after_state={"modules": len(view["modules"]), "locations": len(view["locations"])},
+    )
+    await session.commit()
+    return {"data": view, "meta": {"correlation_id": ctx.correlation_id}}
+
+
+@router.get("/audit")
+async def admin_search_audit(
+    business_id: UUID | None = Query(default=None),
+    actor_identity_id: UUID | None = Query(default=None),
+    event_type: str | None = Query(default=None, max_length=120),
+    actor_context: str | None = Query(default=None),
+    resource_type: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    ctx: RequestContext = Depends(require_super_admin()),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """ADM-018 — append-only evidence view over platform audit events.
+
+    Read-only by construction: there is no write or delete path to
+    `platform_audit_events` anywhere in the API, which is what makes this an
+    evidence view rather than an editable log.
+    """
+    events = await AdminSupportService.search_audit_events(
+        session,
+        business_id=business_id,
+        actor_identity_id=actor_identity_id,
+        event_type=event_type,
+        actor_context=actor_context,
+        resource_type=resource_type,
+        limit=limit,
+    )
+    return {
+        "data": events,
+        "meta": {"correlation_id": ctx.correlation_id, "count": len(events)},
+    }
+
+
+@router.get("/system/health")
+async def admin_system_health(
+    limit: int = Query(default=50, ge=1, le=200),
+    ctx: RequestContext = Depends(require_super_admin()),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """ADM-019 — dead letters, outbox backlog, failed jobs, failing event types.
+
+    Covers the Doc 11 §17.7 exit requirement that "dead-letter, provider,
+    search, payment, Website, and entitlement failures are visible": each of
+    those classes surfaces here as a dead-letter row or a failing event type,
+    since every one of them flows through the outbox or the async job table.
+    """
+    health = await AdminSupportService.system_health(session, limit=limit)
+    return {"data": health, "meta": {"correlation_id": ctx.correlation_id}}
