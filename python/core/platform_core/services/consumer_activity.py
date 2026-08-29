@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform_core.models import ConsumerActivityProjection, CustomerContact
+from platform_core.models import Business, ConsumerActivityProjection, CustomerContact
 
 
 class ConsumerActivityService:
@@ -91,3 +91,53 @@ class ConsumerActivityService:
             resource_id=resource_id,
             summary=summary,
         )
+
+    @staticmethod
+    def serialize(
+        row: ConsumerActivityProjection, *, business_name: str | None = None
+    ) -> dict[str, Any]:
+        return {
+            "id": str(row.id),
+            "business_id": str(row.business_id),
+            "business_name": business_name,
+            "activity_type": row.activity_type,
+            "resource_type": row.resource_type,
+            "resource_id": str(row.resource_id),
+            "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+            "summary": row.summary,
+        }
+
+    @staticmethod
+    async def list_for_identity(
+        session: AsyncSession,
+        *,
+        identity_id: uuid.UUID,
+        resource_type: str | None = None,
+        business_id: uuid.UUID | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """My Activity feed for one consumer (Doc 09 ACC-011, Doc 11 §17.7).
+
+        Scoped strictly to the calling identity. Business display names are
+        joined in so the consumer surface can name who each activity was with
+        without granting any Business-scoped read.
+
+        Only Bookings feed this projection today (BookingService and
+        BookingLifecycleService are its only writers), and only for a
+        CustomerContact carrying an identity_id — a guest booking writes
+        nothing, pending FL-DEC-024 guest-to-authenticated linking.
+        """
+        stmt = (
+            select(ConsumerActivityProjection, Business.display_name)
+            .join(Business, Business.id == ConsumerActivityProjection.business_id)
+            .where(ConsumerActivityProjection.identity_id == identity_id)
+        )
+        if resource_type is not None:
+            stmt = stmt.where(ConsumerActivityProjection.resource_type == resource_type)
+        if business_id is not None:
+            stmt = stmt.where(ConsumerActivityProjection.business_id == business_id)
+        stmt = stmt.order_by(ConsumerActivityProjection.occurred_at.desc()).limit(limit)
+        rows = (await session.execute(stmt)).all()
+        return [
+            ConsumerActivityService.serialize(row, business_name=name) for row, name in rows
+        ]
