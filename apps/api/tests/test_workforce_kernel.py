@@ -83,7 +83,7 @@ def _primary_location(client: TestClient, headers: dict[str, str], business_id: 
     locs = client.get(
         f"/v1/platform/businesses/{business_id}/locations", headers=headers
     ).json()["data"]
-    return cast(str, next(l["id"] for l in locs if l["is_primary"]))
+    return cast(str, next(loc["id"] for loc in locs if loc["is_primary"]))
 
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")

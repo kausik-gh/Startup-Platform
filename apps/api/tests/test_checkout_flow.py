@@ -6,7 +6,7 @@ import asyncio
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, cast
+from typing import Any
 
 import jwt
 import pytest

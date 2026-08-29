@@ -16,7 +16,7 @@ from platform_core.db import get_database_url
 from platform_core.models import Business, MarketplaceBusinessProjection
 from platform_testing.db_helpers import ensure_auth_user
 from platform_worker.job_runner import poll_and_execute_jobs
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 

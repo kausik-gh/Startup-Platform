@@ -175,7 +175,7 @@ class CheckoutService:
             locations = await LocationService.list_for_business(
                 session, business.id, status="active"
             )
-            primary = next((l for l in locations if l.is_primary), locations[0] if locations else None)
+            primary = next((loc for loc in locations if loc.is_primary), locations[0] if locations else None)
             if primary is None:
                 raise ValidationError("Business has no active location")
             location_id = primary.id

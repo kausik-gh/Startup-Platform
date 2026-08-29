@@ -87,11 +87,11 @@ def test_deposit_collection_and_payment_status(
     assert policy.json()["data"]["require_deposit"] is True
 
     location_id = next(
-        l["id"]
-        for l in client.get(
+        loc["id"]
+        for loc in client.get(
             f"/v1/platform/businesses/{bid}/locations", headers=headers
         ).json()["data"]
-        if l["is_primary"]
+        if loc["is_primary"]
     )
     start = (datetime.now(timezone.utc) + timedelta(hours=20)).isoformat()
     end = (datetime.now(timezone.utc) + timedelta(hours=21)).isoformat()
