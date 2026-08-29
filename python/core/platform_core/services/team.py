@@ -259,7 +259,15 @@ class TeamService:
         identity_id: uuid.UUID,
         role: str,
         invited_by: uuid.UUID,
+        correlation_id: str | None = None,
     ) -> BusinessMembership:
+        """Create a pending membership directly, without the email invitation flow.
+
+        Emits `membership.created` with `source="direct_invite"`, mirroring
+        `create_membership_from_invitation` (`source="invitation"`). Without this
+        the direct-invite path was invisible to Notifications, Audit, and every
+        other event consumer, while the email path was not.
+        """
         membership = BusinessMembership(
             business_id=business_id,
             identity_id=identity_id,
@@ -269,6 +277,36 @@ class TeamService:
         )
         session.add(membership)
         await session.flush()
+
+        await OutboxService.publish(
+            session,
+            event_type="membership.created",
+            payload={
+                "business_id": str(business_id),
+                "membership_id": str(membership.id),
+                "identity_id": str(identity_id),
+                "role": role,
+                "status": membership.status,
+                "source": "direct_invite",
+            },
+            business_id=business_id,
+            correlation_id=correlation_id,
+        )
+        await AuditService.record(
+            session,
+            event_type="membership.created",
+            actor_identity_id=invited_by,
+            actor_context="business",
+            business_id=business_id,
+            resource_type="membership",
+            resource_id=membership.id,
+            action="invite_member",
+            after_state={
+                "role": role,
+                "status": membership.status,
+                "identity_id": str(identity_id),
+            },
+        )
         return membership
 
     @staticmethod

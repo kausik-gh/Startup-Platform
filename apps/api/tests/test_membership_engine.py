@@ -610,3 +610,73 @@ async def test_concurrent_ownership_transfer() -> None:
         assert str(biz.primary_owner_identity_id) == str(owner_rows[0].identity_id)
 
     await engine.dispose()
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_direct_invite_emits_membership_created_event(
+    owner_pair: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """`POST /team/invitations` must be visible to event consumers.
+
+    The direct-invite path used to write a membership row and publish nothing,
+    so it was invisible to Notifications, Audit, and every other event consumer
+    while the email-invitation path was not. Both now emit `membership.created`,
+    distinguished by the payload's `source`.
+    """
+    headers, owner_id = owner_pair
+    member_id = uuid.uuid4()
+    _seed_user(member_id, f"{member_id}@example.com")
+
+    with TestClient(app) as client:
+        biz = _create_business(client, headers, f"Direct Invite {uuid.uuid4().hex[:8]}")
+        invite = client.post(
+            f"/v1/b/{biz}/team/invitations",
+            json={"identity_id": str(member_id), "role": "member"},
+            headers=headers,
+        )
+        assert invite.status_code == 200, invite.text
+        membership_id = cast(str, invite.json()["data"]["id"])
+
+    async def _assert() -> None:
+        url = get_database_url()
+        assert url
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            events = (
+                await session.execute(
+                    select(PlatformOutboxEvent).where(
+                        PlatformOutboxEvent.business_id == uuid.UUID(biz),
+                        PlatformOutboxEvent.event_type == "membership.created",
+                    )
+                )
+            ).scalars().all()
+            direct = [
+                e
+                for e in events
+                if (e.payload or {}).get("membership_id") == membership_id
+            ]
+            assert direct, f"no membership.created for the direct invite: {events}"
+            payload = direct[0].payload
+            assert payload["source"] == "direct_invite"
+            assert payload["identity_id"] == str(member_id)
+            assert payload["role"] == "member"
+            assert payload["status"] == "pending"
+
+            audits = (
+                await session.execute(
+                    select(PlatformAuditEvent).where(
+                        PlatformAuditEvent.business_id == uuid.UUID(biz),
+                        PlatformAuditEvent.resource_id == uuid.UUID(membership_id),
+                        PlatformAuditEvent.event_type == "membership.created",
+                    )
+                )
+            ).scalars().all()
+            assert audits, "direct invite left no audit trail"
+            assert audits[0].action == "invite_member"
+            assert audits[0].actor_identity_id == owner_id
+        await engine.dispose()
+
+    asyncio.run(_assert())

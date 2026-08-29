@@ -75,6 +75,7 @@ async def invite_member(
         identity_id=body.identity_id,
         role=body.role,
         invited_by=ctx.identity_id,
+        correlation_id=ctx.correlation_id,
     )
     await session.commit()
     return {
