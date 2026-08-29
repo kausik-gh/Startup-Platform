@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
 from platform_core.exceptions import PlatformError
 from platform_api.errors import platform_error_handler
+from platform_api.rate_limit import RateLimitMiddleware
 from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings, v1_platform_leads, v1_platform_memberships, v1_platform_notifications
 
 # Database lifecycle state
@@ -49,6 +50,15 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Rate limiting (Doc 11 §21.1 gate 8). Added BEFORE CORS so CORS ends up the
+# outer layer (Starlette wraps last-added first): a 429 short-circuited here
+# still travels back out through CORS and gets its headers, so a browser sees
+# the 429 rather than an opaque network error. Opt out per-process with
+# RATE_LIMIT_ENABLED=0 — the test suite does, so parallel workers hammering
+# shared buckets don't trip each other.
+if os.getenv("RATE_LIMIT_ENABLED", "1") != "0":
+    app.add_middleware(RateLimitMiddleware)
 
 # Standard CORS Middleware setup
 app.add_middleware(
