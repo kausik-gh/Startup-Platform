@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { createWorkforceMember } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -15,17 +16,25 @@ export default async function WorkforcePage({
   const token = await getAccessToken()
   if (!token) redirect('/login')
   const [membersRes, locationsRes] = await Promise.all([
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/workforce/members`,
       token
     ),
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/locations`,
       token
     ),
   ])
-  const members = membersRes.data || []
-  const locations = locationsRes.data || []
+  if (!membersRes.ok) {
+    return (
+      <div>
+        <PageHeader title="Workforce" />
+        <GateNotice error={membersRes.error} businessId={params.businessId} moduleLabel="Workforce" />
+      </div>
+    )
+  }
+  const members = membersRes.data.data || []
+  const locations = locationsRes.ok ? locationsRes.data.data || [] : []
   const primary = locations.find((l) => l.is_primary) || locations[0]
 
   async function createMember(formData: FormData) {

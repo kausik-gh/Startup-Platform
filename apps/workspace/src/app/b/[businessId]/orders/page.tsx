@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,11 +28,19 @@ export default async function OrdersBoardPage({
   const token = await getAccessToken()
   if (!token) redirect('/login')
   const qs = searchParams?.status ? `?status=${encodeURIComponent(searchParams.status)}` : ''
-  const res = await apiGet<{ data: OrderRow[] }>(
+  const res = await apiTry<{ data: OrderRow[] }>(
     `/v1/platform/businesses/${params.businessId}/orders${qs}`,
     token
   )
-  const orders = res.data || []
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Orders" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Orders" />
+      </div>
+    )
+  }
+  const orders = res.data.data || []
 
   return (
     <div>

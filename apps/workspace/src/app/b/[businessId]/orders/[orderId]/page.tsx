@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { advanceOrderStatus, cancelOrder } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,7 @@ export default async function OrderDetailPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<{
+  const res = await apiTry<{
     data: {
       id: string
       order_number: string
@@ -26,7 +27,16 @@ export default async function OrderDetailPage({
       items?: Array<{ title: string; quantity: number; line_total: number }>
     }
   }>(`/v1/platform/businesses/${params.businessId}/orders/${params.orderId}`, token)
-  const order = res.data
+  if (!res.ok) {
+    return (
+      <div>
+        <Link href={`/b/${params.businessId}/orders`}>← Orders</Link>
+        <PageHeader title="Order" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Orders" />
+      </div>
+    )
+  }
+  const order = res.data.data
   const nextByStatus: Record<string, string[]> = {
     pending: ['accepted', 'rejected'],
     accepted: ['preparing'],

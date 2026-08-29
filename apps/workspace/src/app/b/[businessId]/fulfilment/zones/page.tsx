@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { createZone, updateFulfilmentSettings } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -14,17 +15,28 @@ export default async function FulfilmentZonesPage({
   const token = await getAccessToken()
   if (!token) redirect('/login')
   const [zonesRes, settingsRes] = await Promise.all([
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/b/${params.businessId}/fulfilment/zones`,
       token
     ),
-    apiGet<{ data: { pickup_enabled: boolean; delivery_enabled: boolean } }>(
+    apiTry<{ data: { pickup_enabled: boolean; delivery_enabled: boolean } }>(
       `/v1/b/${params.businessId}/fulfilment/settings`,
       token
     ),
   ])
-  const zones = zonesRes.data || []
-  const settings = settingsRes.data
+  if (!zonesRes.ok) {
+    return (
+      <div>
+        <Link href={`/b/${params.businessId}/fulfilment`}>← Fulfilment</Link>
+        <PageHeader title="Zones & charges" />
+        <GateNotice error={zonesRes.error} businessId={params.businessId} moduleLabel="Fulfilment" />
+      </div>
+    )
+  }
+  const zones = zonesRes.data.data || []
+  const settings = settingsRes.ok
+    ? settingsRes.data.data
+    : { pickup_enabled: false, delivery_enabled: false }
 
   return (
     <div>

@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { updateJobStatus } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,7 @@ export default async function FulfilmentJobDetailPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<{
+  const res = await apiTry<{
     data: {
       id: string
       order_id: string
@@ -26,7 +27,16 @@ export default async function FulfilmentJobDetailPage({
       tracking_token: string
     }
   }>(`/v1/b/${params.businessId}/fulfilment/jobs/${params.jobId}`, token)
-  const job = res.data
+  if (!res.ok) {
+    return (
+      <div>
+        <Link href={`/b/${params.businessId}/fulfilment`}>← Fulfilment</Link>
+        <PageHeader title="Fulfilment job" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Fulfilment" />
+      </div>
+    )
+  }
+  const job = res.data.data
   const transitions: Record<string, string[]> = {
     pending: ['preparing', 'cancelled', 'failed'],
     preparing: ['ready', 'cancelled', 'failed'],

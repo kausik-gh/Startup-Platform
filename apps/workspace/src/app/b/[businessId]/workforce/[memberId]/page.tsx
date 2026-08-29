@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet, apiPost } from '@/lib/api'
+import { apiTry, apiPost } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { deactivateWorkforceMember } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -14,22 +15,31 @@ export default async function WorkforceMemberPage({
   const token = await getAccessToken()
   if (!token) redirect('/login')
   const [memberRes, offeringsRes, locationsRes] = await Promise.all([
-    apiGet<{ data: Record<string, unknown> }>(
+    apiTry<{ data: Record<string, unknown> }>(
       `/v1/platform/businesses/${params.businessId}/workforce/members/${params.memberId}`,
       token
     ),
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/products`,
       token
-    ).catch(() => ({ data: [] as Array<Record<string, unknown>> })),
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    ),
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/locations`,
       token
     ),
   ])
-  const m = memberRes.data
-  const offerings = offeringsRes.data || []
-  const locations = locationsRes.data || []
+  if (!memberRes.ok) {
+    return (
+      <div>
+        <Link href={`/b/${params.businessId}/workforce`}>← Workforce</Link>
+        <PageHeader title="Provider" />
+        <GateNotice error={memberRes.error} businessId={params.businessId} moduleLabel="Workforce" />
+      </div>
+    )
+  }
+  const m = memberRes.data.data
+  const offerings = offeringsRes.ok ? offeringsRes.data.data || [] : []
+  const locations = locationsRes.ok ? locationsRes.data.data || [] : []
 
   async function assignLocation(formData: FormData) {
     'use server'

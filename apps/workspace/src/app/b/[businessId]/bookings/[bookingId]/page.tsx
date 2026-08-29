@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { transitionBooking } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -14,17 +15,26 @@ export default async function BookingDetailPage({
   const token = await getAccessToken()
   if (!token) redirect('/login')
   const [bookingRes, historyRes] = await Promise.all([
-    apiGet<{ data: Record<string, unknown> }>(
+    apiTry<{ data: Record<string, unknown> }>(
       `/v1/platform/businesses/${params.businessId}/bookings/${params.bookingId}`,
       token
     ),
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/bookings/${params.bookingId}/history`,
       token
     ),
   ])
-  const b = bookingRes.data
-  const history = historyRes.data || []
+  if (!bookingRes.ok) {
+    return (
+      <div>
+        <Link href={`/b/${params.businessId}/bookings`}>← Bookings</Link>
+        <PageHeader title="Booking" />
+        <GateNotice error={bookingRes.error} businessId={params.businessId} moduleLabel="Bookings" />
+      </div>
+    )
+  }
+  const b = bookingRes.data.data
+  const history = historyRes.ok ? historyRes.data.data || [] : []
 
   async function confirm() {
     'use server'

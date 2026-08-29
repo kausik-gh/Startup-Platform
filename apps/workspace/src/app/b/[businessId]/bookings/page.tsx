@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { updateBookingsPolicy } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -18,11 +19,11 @@ export default async function BookingsPage({
   if (!token) redirect('/login')
   const qs = searchParams?.status ? `?status=${encodeURIComponent(searchParams.status)}` : ''
   const [listRes, policyRes] = await Promise.all([
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/bookings${qs}`,
       token
     ),
-    apiGet<{
+    apiTry<{
       data: {
         require_deposit: boolean
         deposit_amount: number | null
@@ -30,8 +31,18 @@ export default async function BookingsPage({
       }
     }>(`/v1/platform/businesses/${params.businessId}/bookings-policy`, token),
   ])
-  const bookings = listRes.data || []
-  const policy = policyRes.data
+  if (!listRes.ok) {
+    return (
+      <div>
+        <PageHeader title="Bookings" />
+        <GateNotice error={listRes.error} businessId={params.businessId} moduleLabel="Bookings" />
+      </div>
+    )
+  }
+  const bookings = listRes.data.data || []
+  const policy = policyRes.ok
+    ? policyRes.data.data
+    : { require_deposit: false, deposit_amount: null, cancel_window_hours: 24 }
 
   async function savePolicy(formData: FormData) {
     'use server'

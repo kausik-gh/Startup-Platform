@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,17 +21,27 @@ export default async function FulfilmentBoardPage({
   if (searchParams?.mode) qs.set('mode', searchParams.mode)
   const suffix = qs.toString() ? `?${qs}` : ''
   const [jobsRes, settingsRes] = await Promise.all([
-    apiGet<{ data: Array<Record<string, unknown>> }>(
+    apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/b/${params.businessId}/fulfilment/jobs${suffix}`,
       token
     ),
-    apiGet<{ data: { active_modes?: string[]; pickup_enabled: boolean; delivery_enabled: boolean } }>(
+    apiTry<{ data: { active_modes?: string[]; pickup_enabled: boolean; delivery_enabled: boolean } }>(
       `/v1/b/${params.businessId}/fulfilment/settings`,
       token
     ),
   ])
-  const jobs = jobsRes.data || []
-  const settings = settingsRes.data
+  if (!jobsRes.ok) {
+    return (
+      <div>
+        <PageHeader title="Fulfilment" />
+        <GateNotice error={jobsRes.error} businessId={params.businessId} moduleLabel="Fulfilment" />
+      </div>
+    )
+  }
+  const jobs = jobsRes.data.data || []
+  const settings = settingsRes.ok
+    ? settingsRes.data.data
+    : { active_modes: [], pickup_enabled: false, delivery_enabled: false }
 
   return (
     <div>

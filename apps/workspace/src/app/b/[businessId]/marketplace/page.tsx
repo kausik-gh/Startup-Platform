@@ -1,18 +1,17 @@
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { optInDiscoverable, setVisibility } from './actions'
 
 export const dynamic = 'force-dynamic'
 
 type MarketplaceSettings = {
-  data: {
-    visibility: string
-    state: string
-    eligibility: { eligible: boolean; reasons: string[] }
-    discoverability_means: string[]
-    index_health?: { last_status: string; last_reason?: string | null } | null
-  }
+  visibility: string
+  state: string
+  eligibility: { eligible: boolean; reasons: string[] }
+  discoverability_means: string[]
+  index_health?: { last_status: string; last_reason?: string | null } | null
 }
 
 export default async function MarketplacePresencePage({
@@ -22,11 +21,23 @@ export default async function MarketplacePresencePage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<MarketplaceSettings>(
+  const res = await apiTry<{ data: MarketplaceSettings }>(
     `/v1/b/${params.businessId}/marketplace`,
     token
   )
-  const data = res.data
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Marketplace Presence" />
+        <GateNotice
+          error={res.error}
+          businessId={params.businessId}
+          moduleLabel="Marketplace Presence"
+        />
+      </div>
+    )
+  }
+  const data = res.data.data
 
   return (
     <div>
