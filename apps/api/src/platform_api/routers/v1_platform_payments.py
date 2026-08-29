@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platform_api.db import get_db_session
 from platform_api.dependencies import BusinessActorContext, require_business_actor
 from platform_core.authorization.resolver import AuthorizationService
-from platform_core.exceptions import PermissionDenied
+from platform_core.exceptions import PermissionDenied, ValidationError
 from platform_core.permissions import (
     BOOKINGS_UPDATE,
+    MEMBERSHIPS_MANAGE_ENROLMENT,
     ORDERS_UPDATE_STATUS,
     PAYMENTS_EXPORT,
     PAYMENTS_MANAGE_CONNECTION,
@@ -25,6 +26,7 @@ from platform_core.resolvers.payment_resolver import PaymentResolver
 from platform_core.services.merchant import MerchantService
 from platform_core.services.payment_attempt import PaymentAttemptService
 from platform_core.services.refund import RefundService
+from platform_core.validation.payment import SOURCE_TYPES
 
 router = APIRouter(prefix="/v1/platform/businesses", tags=["payments"])
 
@@ -60,12 +62,34 @@ class MerchantConnectionRequest(BaseModel):
     provider_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+# A payment attempt requires the permission for the SOURCE module, not a
+# blanket payments permission — creating a payment against an order is an order
+# operation. Keyed by every member of `SOURCE_TYPES`; an unmapped source type
+# raises KeyError here rather than silently inheriting the wrong module's
+# permission. That is how AUD-10 happened: `membership` was added to
+# `SOURCE_TYPES` in Stage 6 while this mapping was a two-way `if/else` that
+# defaulted membership to the Bookings permission.
+_SOURCE_TYPE_PERMISSION: dict[str, str] = {
+    "order": ORDERS_UPDATE_STATUS,
+    "booking": BOOKINGS_UPDATE,
+    "membership": MEMBERSHIPS_MANAGE_ENROLMENT,
+}
+
+
 async def _require_payment_create_permission(
     actor: BusinessActorContext,
     session: AsyncSession,
     source_type: str,
 ) -> None:
-    permission = ORDERS_UPDATE_STATUS if source_type == "order" else BOOKINGS_UPDATE
+    if source_type not in SOURCE_TYPES:
+        # Client-supplied garbage — a clean 422, same as the payload validator.
+        raise ValidationError(
+            "Unsupported source_type",
+            details={"errors": [{"field": "source_type", "message": "Unsupported source"}]},
+        )
+    # A source type that IS valid but has no permission mapping is a developer
+    # error (SOURCE_TYPES gained a member without a mapping here) — let it raise.
+    permission = _SOURCE_TYPE_PERMISSION[source_type]
     decision = await AuthorizationService.authorize(
         session,
         business_id=actor.business.id,

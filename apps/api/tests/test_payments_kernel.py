@@ -406,3 +406,200 @@ def test_merchant_connection_upsert(owner: tuple[dict[str, str], uuid.UUID]) -> 
     )
     assert get_resp.status_code == 200, get_resp.text
     assert get_resp.json()["data"]["provider_metadata"]["merchant_ref"] == "m-1"
+
+
+# ---------------------------------------------------------------------------
+# AUD-10 — payment-create permission is keyed to the SOURCE module, not a
+# two-way order/booking branch that silently caught membership.
+# ---------------------------------------------------------------------------
+def _commerce_business(client: TestClient, headers: dict[str, str]) -> str:
+    resp = client.post(
+        "/v1/platform/businesses",
+        json={"display_name": f"Src Perm Co {uuid.uuid4().hex[:8]}", "business_type": "salon"},
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    bid = cast(str, resp.json()["data"]["business"]["id"])
+    for module_id in (
+        "offerings-catalog",
+        "orders",
+        "bookings",
+        "memberships",
+        "payments",
+        "workforce",
+        "customer-relationships",
+        "inventory",
+    ):
+        enabled = client.post(f"/v1/b/{bid}/modules/{module_id}/enable", headers=headers)
+        assert enabled.status_code == 200, enabled.text
+    return bid
+
+
+def _member_with_grants(
+    client: TestClient,
+    owner_headers: dict[str, str],
+    business_id: str,
+    permissions: list[str],
+) -> dict[str, str]:
+    member_id = uuid.uuid4()
+    email = f"{member_id}@example.com"
+    _seed(member_id, email)
+    invite = client.post(
+        f"/v1/b/{business_id}/team/invitations",
+        json={"identity_id": str(member_id), "role": "member"},
+        headers=owner_headers,
+    )
+    assert invite.status_code == 200, invite.text
+    membership_id = invite.json()["data"]["id"]
+    activate = client.post(
+        f"/v1/b/{business_id}/team/members/{membership_id}/activate", headers=owner_headers
+    )
+    assert activate.status_code == 200, activate.text
+    granted = client.post(
+        f"/v1/b/{business_id}/team/members/{membership_id}/permissions",
+        json={"permissions": permissions},
+        headers=owner_headers,
+    )
+    assert granted.status_code == 200, granted.text
+    return _headers(member_id, email)
+
+
+def _membership_enrolment(
+    client: TestClient, headers: dict[str, str], business_id: str
+) -> str:
+    plan_id = client.post(
+        f"/v1/platform/businesses/{business_id}/membership-plans",
+        json={
+            "name": f"Plan {uuid.uuid4().hex[:6]}",
+            "price_amount": 60,
+            "duration_days": 30,
+            "status": "active",
+            "visibility": "public",
+        },
+        headers=headers,
+    ).json()["data"]["id"]
+    contact_id = _create_customer(client, headers, business_id)
+    enrolment = client.post(
+        f"/v1/platform/businesses/{business_id}/membership-enrolments",
+        json={
+            "plan_id": plan_id,
+            "customer_contact_id": contact_id,
+            "payment_method": "cod",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+        headers=headers,
+    )
+    assert enrolment.status_code == 200, enrolment.text
+    return cast(str, enrolment.json()["data"]["id"])
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_membership_payment_requires_memberships_permission_not_bookings(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """AUD-10: a membership payment needs memberships.manage_enrolment.
+
+    Before the fix, the source->permission map was
+    `ORDERS_UPDATE_STATUS if source_type == "order" else BOOKINGS_UPDATE`, so a
+    membership payment was gated on a Bookings permission — wrong module both
+    ways round.
+    """
+    headers, _ = owner
+    client = TestClient(app)
+    bid = _commerce_business(client, headers)
+    enrolment_id = _membership_enrolment(client, headers, bid)
+
+    # Holds payments.read + the Bookings permission that used to leak through.
+    bookings_member = _member_with_grants(
+        client, headers, bid, ["payments.read", "bookings.update"]
+    )
+    blocked = client.post(
+        f"/v1/platform/businesses/{bid}/payments",
+        json={
+            "source_type": "membership",
+            "source_id": enrolment_id,
+            "amount": 60.0,
+            "payment_method": "cod",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+        headers=bookings_member,
+    )
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["error"]["details"]["permission"] == "memberships.manage_enrolment"
+
+    # Holds payments.read + the correct module permission.
+    memberships_member = _member_with_grants(
+        client, headers, bid, ["payments.read", "memberships.manage_enrolment"]
+    )
+    allowed = client.post(
+        f"/v1/platform/businesses/{bid}/payments",
+        json={
+            "source_type": "membership",
+            "source_id": enrolment_id,
+            "amount": 60.0,
+            "payment_method": "cod",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+        headers=memberships_member,
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["data"]["source_type"] == "membership"
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_membership_permission_does_not_grant_order_payments(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """The other direction: memberships.manage_enrolment is not orders access."""
+    headers, _ = owner
+    client = TestClient(app)
+    bid = _commerce_business(client, headers)
+    location_id = _primary_location_id(client, headers, bid)
+    product_id = _create_tracked_product(client, headers, bid)
+    _stock_product(client, headers, bid, product_id, location_id)
+    order = _create_order(client, headers, bid, location_id, product_id)
+
+    memberships_member = _member_with_grants(
+        client, headers, bid, ["payments.read", "memberships.manage_enrolment"]
+    )
+    blocked = client.post(
+        f"/v1/platform/businesses/{bid}/payments",
+        json={
+            "source_type": "order",
+            "source_id": order["id"],
+            "amount": order["total_amount"],
+            "payment_method": "cod",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+        headers=memberships_member,
+    )
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["error"]["details"]["permission"] == "orders.update_status"
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_unknown_payment_source_type_is_422_not_500(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    """A garbage source_type is a clean 422, never a KeyError 500.
+
+    The KeyError on the source->permission map is a developer tripwire for a
+    member of SOURCE_TYPES with no mapping; it must not be reachable by a
+    client sending an unrecognised value.
+    """
+    headers, _ = owner
+    client = TestClient(app)
+    bid = _commerce_business(client, headers)
+    resp = client.post(
+        f"/v1/platform/businesses/{bid}/payments",
+        json={
+            "source_type": "invoice",
+            "source_id": str(uuid.uuid4()),
+            "amount": 10.0,
+            "payment_method": "cod",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
