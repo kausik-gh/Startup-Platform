@@ -17,3 +17,9 @@ imported by pytest before test collection, so it does.
 import os
 
 os.environ.setdefault("RATE_LIMIT_ENABLED", "0")
+
+# AUD-11: keep the per-request INFO line ("request.completed") out of the test
+# transcript. WARN/ERROR — gate denials, 5xx, webhook signature rejections —
+# still print, and the redaction filter is exercised directly by
+# test_logging_redaction.py regardless of level.
+os.environ.setdefault("LOG_LEVEL", "WARNING")

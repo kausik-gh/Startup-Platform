@@ -4,7 +4,10 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from platform_core.logging import get_logger
 from platform_worker.claiming import claim_outbox_batch
+
+logger = get_logger("platform_worker.outbox")
 
 KNOWN_HANDLERS = {
     "business.created",
@@ -277,8 +280,24 @@ async def poll_and_dispatch_outbox(session: AsyncSession, worker_id: str) -> int
             attempt = int(event.get("attempt_count", 0)) + 1
             max_attempts = int(event.get("max_attempts", 5))
             if attempt >= max_attempts:
+                logger.error(
+                    "outbox.dead_letter",
+                    event_id=str(event["id"]),
+                    event_type=event_type,
+                    business_id=str(event.get("business_id") or ""),
+                    attempt=attempt,
+                    error=str(exc),
+                )
                 await _mark_dead_letter(session, event, str(exc))
             else:
+                logger.warning(
+                    "outbox.retry_scheduled",
+                    event_id=str(event["id"]),
+                    event_type=event_type,
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    error=str(exc),
+                )
                 await _mark_retry(session, str(event["id"]), attempt, str(exc))
     await session.commit()
     return processed

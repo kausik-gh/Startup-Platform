@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.exceptions import ValidationError
+from platform_core.logging import get_logger
 from platform_core.models import PaymentAttempt, PaymentWebhookReceipt
 from platform_core.payments.provider_adapter import (
     extract_event_id,
@@ -20,6 +21,8 @@ from platform_core.services.audit import AuditService
 from platform_core.services.business import BusinessService
 from platform_core.services.outbox import OutboxService
 from platform_core.services.payment_attempt import PaymentAttemptService
+
+logger = get_logger("platform_core.payment_webhook")
 
 
 class PaymentWebhookService:
@@ -33,6 +36,14 @@ class PaymentWebhookService:
         correlation_id: str,
     ) -> dict[str, Any]:
         if not verify_webhook_signature(provider, raw_body, headers):
+            # AUD-11: signature rejections are a security event. The redaction
+            # processor scrubs any signature/secret values before this ships.
+            logger.warning(
+                "payment_webhook.signature_rejected",
+                provider=provider,
+                correlation_id=correlation_id,
+                body_bytes=len(raw_body),
+            )
             raise ValidationError(
                 "Invalid webhook signature",
                 details={"provider": provider},
@@ -104,9 +115,26 @@ class PaymentWebhookService:
             )
             receipt.status = "processed"
             receipt.processed_at = datetime.now(timezone.utc)
+            if target_status == "failed":
+                logger.warning(
+                    "payment.failed",
+                    provider=provider,
+                    payment_id=str(payment.id),
+                    business_id=str(payment.business_id),
+                    failure_code=payload.get("failure_code"),
+                    correlation_id=correlation_id,
+                )
         except Exception as exc:
             receipt.status = "failed"
             receipt.failure_reason = str(exc)
+            logger.error(
+                "payment_webhook.processing_failed",
+                provider=provider,
+                payment_id=str(payment.id),
+                business_id=str(payment.business_id),
+                correlation_id=correlation_id,
+                exc_info=exc,
+            )
             raise
 
         await OutboxService.publish(

@@ -18,6 +18,7 @@ from platform_core.exceptions import (
     ResourceNotFound,
     ValidationError,
 )
+from platform_core.logging import bind_request_context
 from platform_core.models import PlatformIdentity
 from platform_core.services.business import BusinessService
 from platform_core.services.entitlement import EntitlementService, ModuleService
@@ -161,6 +162,11 @@ async def resolve_request_context(
     identity = await IdentityService.bootstrap_identity(session, supabase_user_id, email)
     await session.flush()
 
+    # AUD-11: bind the identity to the log context as soon as it resolves, so
+    # every subsequent log line in this request carries identity_id. business_id
+    # is added below once a business context is confirmed.
+    bind_request_context(identity_id=str(identity.id))
+
     # RLS (AUD-02): bind the identity GUC now, before any membership / business
     # / admin-grant lookup below. Those tables are row-level scoped, and the
     # `identity_id = current_identity_id()` policy arm is what lets this
@@ -271,6 +277,7 @@ async def resolve_request_context(
             for mid, s in raw_states.items()
         }
         await bind_session_context(session, identity.id, business_id)
+        bind_request_context(business_id=str(business_id))
     else:
         await bind_session_context(session, identity.id, None)
 

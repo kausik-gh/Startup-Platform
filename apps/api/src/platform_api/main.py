@@ -6,7 +6,9 @@ from sqlalchemy import text
 from contextlib import asynccontextmanager
 from platform_core.db import create_worker_session_factory
 from platform_core.exceptions import PlatformError
+from platform_core.logging import configure as configure_logging, get_logger
 from platform_api.errors import platform_error_handler
+from platform_api.observability import RequestLogMiddleware
 from platform_api.rate_limit import RateLimitMiddleware
 from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings, v1_platform_leads, v1_platform_memberships, v1_platform_notifications
 
@@ -19,13 +21,18 @@ db_session_factory = None
 async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
     global db_engine, db_session_factory
 
+    # AUD-11: structlog must be configured (redaction processor installed)
+    # before the first line ships.
+    configure_logging()
+    get_logger("platform_api").info("api.startup", rate_limit=os.getenv("RATE_LIMIT_ENABLED", "1") != "0")
+
     if os.getenv("DATABASE_URL"):
         try:
             # role="user" → the NOBYPASSRLS platform_api connection. The API
             # request path is subject to row-level policies (AUD-02).
             db_engine, db_session_factory = create_worker_session_factory(role="user")
         except Exception as e:
-            print(f"Warning: Failed to initialize db session factory: {e}")
+            get_logger("platform_api").error("api.db_session_factory_init_failed", error=str(e))
             db_engine = None
             db_session_factory = None
 
@@ -61,6 +68,11 @@ app = FastAPI(
 # shared buckets don't trip each other.
 if os.getenv("RATE_LIMIT_ENABLED", "1") != "0":
     app.add_middleware(RateLimitMiddleware)
+
+# AUD-11: request-line logging + correlation-id propagation. Added after the
+# rate limiter so it stays inside CORS but wraps the limiter — a 429 still gets
+# a log line and an X-Correlation-Id.
+app.add_middleware(RequestLogMiddleware)
 
 # Standard CORS Middleware setup
 app.add_middleware(
