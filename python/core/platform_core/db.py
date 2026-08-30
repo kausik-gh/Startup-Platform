@@ -14,14 +14,32 @@ def get_database_url() -> str | None:
     return os.getenv("DATABASE_URL")
 
 
+def get_api_database_url() -> str | None:
+    """Connection string for the RLS-enforcing `platform_api` role.
+
+    Falls back to DATABASE_URL when unset, so a deploy that has not yet
+    provisioned the role keeps working (RLS just stays inert, as before).
+    """
+    return os.getenv("API_DATABASE_URL") or os.getenv("DATABASE_URL")
+
+
 def create_worker_session_factory(
     role: str = "service",
 ) -> Tuple[AsyncEngine, async_sessionmaker[AsyncSession]]:
     """
     Creates an async engine and session factory.
-    role: "service" (RLS bypassed, e.g. for worker processes) or "user" (RLS active)
+
+    role="service"  -> DATABASE_URL, the `postgres` role (rolbypassrls=true).
+                       Worker, migrations, and anything that legitimately needs
+                       to cross tenant boundaries.
+    role="user"     -> API_DATABASE_URL, the `platform_api` role
+                       (NOBYPASSRLS). The API request path — every query is
+                       subject to the row-level policies, scoped by the
+                       `app.current_business_id` / `app.current_identity_id`
+                       session GUCs bound per request (see
+                       platform_core.context_resolver.bind_session_context).
     """
-    db_url = get_database_url()
+    db_url = get_api_database_url() if role == "user" else get_database_url()
     if not db_url:
         raise ValueError("DATABASE_URL environment variable is not set")
 

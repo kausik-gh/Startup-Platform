@@ -216,6 +216,15 @@ class BusinessService:
         session.add(business)
         await session.flush()
 
+        # RLS (AUD-02): bind the tenant GUC now, before creating the child rows
+        # (location, membership, profile, modules, website, ...). Their write
+        # policies check `business_id = current_business_id()`; without this the
+        # INSERTs fail the WITH CHECK. Safe to bind here — the row exists and
+        # `primary_owner_identity_id = identity_id`, so the creator owns it.
+        from platform_core.context_resolver import bind_session_context
+
+        await bind_session_context(session, identity_id, business.id)
+
         location = BusinessLocation(
             business_id=business.id,
             name="Primary Location",
@@ -369,16 +378,6 @@ class BusinessService:
             auto=True,
         )
 
-        # Bind session for subsequent work in the same request transaction.
-        await session.execute(
-            text("SELECT set_config('app.current_identity_id', :iid, true)"),
-            {"iid": str(identity_id)},
-        )
-        await session.execute(
-            text("SELECT set_config('app.current_business_id', :bid, true)"),
-            {"bid": str(business.id)},
-        )
-
         return business, location, membership, profile
 
     @staticmethod
@@ -402,6 +401,13 @@ class BusinessService:
             raise MembershipRequired()
         if membership.status != "active":
             raise MembershipRequired()
+
+        # RLS (AUD-02): membership is confirmed active — bind the tenant GUC
+        # before the entitlement / module-state / location reads below, which
+        # are all row-level scoped by `business_id = current_business_id()`.
+        from platform_core.context_resolver import bind_session_context
+
+        await bind_session_context(session, identity_id, business_id)
 
         permissions = await TeamService.resolve_permissions(session, membership)
         entitlements = await EntitlementService.get_effective(session, business_id)
@@ -461,14 +467,6 @@ class BusinessService:
                 after_state={"default_business_id": str(business_id)},
             )
 
-        await session.execute(
-            text("SELECT set_config('app.current_identity_id', :iid, true)"),
-            {"iid": str(identity_id)},
-        )
-        await session.execute(
-            text("SELECT set_config('app.current_business_id', :bid, true)"),
-            {"bid": str(business_id)},
-        )
 
         return BusinessService.hydrate_switch_response(
             business=business,

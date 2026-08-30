@@ -21,7 +21,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
 
     if os.getenv("DATABASE_URL"):
         try:
-            db_engine, db_session_factory = create_worker_session_factory()
+            # role="user" → the NOBYPASSRLS platform_api connection. The API
+            # request path is subject to row-level policies (AUD-02).
+            db_engine, db_session_factory = create_worker_session_factory(role="user")
         except Exception as e:
             print(f"Warning: Failed to initialize db session factory: {e}")
             db_engine = None

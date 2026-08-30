@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from platform_core.exceptions import ValidationError
 from platform_core.gates import assert_business_mutable
 from platform_core.models import BusinessProfile, WebsitePage, WebsiteSection, WebsiteVersion
+from platform_core.context_resolver import bind_public_context
 from platform_core.resolvers.website_resolver import WebsiteResolver
 from platform_core.services.audit import AuditService
 from platform_core.services.business import BusinessService
@@ -217,6 +218,7 @@ class WebsitePublishService:
         business = await BusinessService.get_by_slug(session, slug)
         if business is None or business.deleted_at is not None:
             raise ResourceNotFound("Website")
+        await bind_public_context(session, business.id)
 
         try:
             website = await WebsiteResolver.resolve_website(session, business_id=business.id)

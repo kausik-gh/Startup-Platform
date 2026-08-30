@@ -67,6 +67,7 @@ async def resolve_business_actor(
     deliberately outside the optional-module Entitlement/activation path.
     """
     from platform_core.authorization.resolver import AuthorizationService
+    from platform_core.context_resolver import bind_session_context
 
     business = await BusinessService.get_by_id(session, business_id)
     if not business:
@@ -74,6 +75,15 @@ async def resolve_business_actor(
     membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
     if membership is None:
         raise MembershipRequired()
+
+    # RLS (AUD-02): the request context's GUC was bound from the X-Business-Id
+    # header, which most callers don't send — they carry the business in the
+    # path. Now that gates [3] and [4] have confirmed this identity is an active
+    # member, bind `app.current_business_id` from the verified path value so the
+    # handler's tenant-scoped queries resolve. Binding earlier, from the
+    # unverified path param, would let a non-member read the row.
+    await bind_session_context(session, ctx.identity_id, business_id)
+
     if module_id is not None:
         assert_entitled(ctx, module_id)
         assert_module_operational(ctx, module_id)
@@ -122,12 +132,16 @@ async def resolve_business_member(
     (NotificationService.resolve_recipients), so this does not widen access to
     Business data. Anything reading another identity's data keeps gate [8].
     """
+    from platform_core.context_resolver import bind_session_context
+
     business = await BusinessService.get_by_id(session, business_id)
     if not business:
         raise ResourceNotFound("Business")
     membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
     if membership is None:
         raise MembershipRequired()
+    # RLS: bind the verified business scope from the path (see resolve_business_actor).
+    await bind_session_context(session, ctx.identity_id, business_id)
     return BusinessActorContext(request=ctx, business=business, actor_membership=membership)
 
 

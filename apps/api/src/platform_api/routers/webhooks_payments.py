@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform_api.db import get_db_session
+from platform_api.db import get_service_db_session
 from platform_core.services.payment_webhook import PaymentWebhookService
 
 router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/v1/webhooks", tags=["webhooks"])
 async def ingest_payment_webhook(
     provider: str,
     request: Request,
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
     x_correlation_id: str | None = Header(default=None, alias="X-Correlation-Id"),
 ) -> dict[str, Any]:
     correlation_id = x_correlation_id or str(uuid.uuid4())

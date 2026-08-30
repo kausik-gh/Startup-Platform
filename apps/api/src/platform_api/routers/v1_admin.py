@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform_api.db import get_db_session
+from platform_api.db import get_service_db_session
 from platform_api.dependencies import require_super_admin
 from platform_core.context import RequestContext
 from platform_core.exceptions import ResourceNotFound
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/v1/admin", tags=["admin"])
 async def admin_get_business(
     business_id: UUID,
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     business = await BusinessService.get_by_id(session, business_id)
     if not business:
@@ -62,7 +62,7 @@ async def admin_get_business(
 async def admin_list_indexing_health(
     status: str | None = Query(default=None),
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     query = select(MarketplaceIndexHealth).order_by(
         MarketplaceIndexHealth.last_attempt_at.desc().nullslast()
@@ -104,7 +104,7 @@ async def admin_list_indexing_health(
 async def admin_get_indexing_health(
     business_id: UUID,
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     business = await BusinessService.get_by_id(session, business_id)
     if not business:
@@ -134,7 +134,7 @@ async def admin_get_indexing_health(
 async def admin_reindex_business(
     business_id: UUID,
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     business = await BusinessService.get_by_id(session, business_id)
     if not business:
@@ -177,7 +177,7 @@ async def admin_search_businesses(
     business_status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     """ADM-002 — search across all Businesses.
 
@@ -198,7 +198,7 @@ async def admin_search_businesses(
 async def admin_business_support_view(
     business_id: UUID,
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     """ADM-003 + ADM-008 — the support hub for one Business, attributed."""
     view = await AdminSupportService.business_support_view(session, business_id=business_id)
@@ -229,7 +229,7 @@ async def admin_search_audit(
     resource_type: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     """ADM-018 — append-only evidence view over platform audit events.
 
@@ -256,7 +256,7 @@ async def admin_search_audit(
 async def admin_system_health(
     limit: int = Query(default=50, ge=1, le=200),
     ctx: RequestContext = Depends(require_super_admin()),
-    session: AsyncSession = Depends(get_db_session),
+    session: AsyncSession = Depends(get_service_db_session),
 ) -> dict[str, Any]:
     """ADM-019 — dead letters, outbox backlog, failed jobs, failing event types.
 

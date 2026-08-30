@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from platform_core.context_resolver import bind_public_context
 from platform_core.exceptions import ResourceNotFound, ValidationError
 from platform_core.models import BusinessModuleState, MerchantConnection, Offering
 from platform_core.services.business import BusinessService
@@ -29,6 +30,9 @@ class CheckoutService:
         business = await BusinessService.get_by_slug(session, slug)
         if business is None or business.deleted_at is not None:
             raise ResourceNotFound("Business")
+        # Guest request: bind the tenant GUC so subsequent RLS-scoped reads
+        # (offerings, inventory, ...) resolve. Doc 11 §21.1 / AUD-02.
+        await bind_public_context(session, business.id)
         return business
 
     @staticmethod

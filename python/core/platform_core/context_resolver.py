@@ -1,3 +1,4 @@
+import os
 import uuid
 from uuid import uuid4
 
@@ -66,20 +67,60 @@ def _parse_business_context(
     return OperatingContext.PERSONAL, None, None
 
 
+# RLS is only enforced when the API is on the platform_api connection
+# (API_DATABASE_URL set). When it is not, the session GUCs are read by nobody —
+# binding them is wasted round-trips, and at test parallelism the extra
+# statements add connection pressure against the pooler. Gate every bind on it.
+_RLS_ENFORCING = os.getenv("API_DATABASE_URL") is not None
+
+
 async def bind_session_context(
     session: AsyncSession,
     identity_id: uuid.UUID,
     business_id: uuid.UUID | None,
 ) -> None:
+    """Bind the RLS session GUCs for the request.
+
+    Uses set_config(..., is_local=false) — SESSION scope, not transaction
+    scope — because a transaction-local setting is wiped by the first commit()
+    in a handler, which would strip the request's tenant scope mid-flight.
+
+    Session scope means the value persists on the pooled connection after the
+    request. That is safe here only because `get_db_session` RESETs both GUCs
+    in its finally block before the connection returns to the pool, and every
+    authenticated request re-binds through this function. A path that opens a
+    session without binding context gets a connection with the GUCs cleared
+    (RLS then returns nothing for tenant-scoped tables — fail closed).
+
+    No-op when RLS is not being enforced (API_DATABASE_URL unset).
+    """
+    if not _RLS_ENFORCING:
+        return
     await session.execute(
-        text("SELECT set_config('app.current_identity_id', :iid, true)"),
+        text("SELECT set_config('app.current_identity_id', :iid, false)"),
         {"iid": str(identity_id)},
     )
-    if business_id:
-        await session.execute(
-            text("SELECT set_config('app.current_business_id', :bid, true)"),
-            {"bid": str(business_id)},
-        )
+    await session.execute(
+        text("SELECT set_config('app.current_business_id', :bid, false)"),
+        {"bid": str(business_id) if business_id else ""},
+    )
+
+
+async def bind_public_context(session: AsyncSession, business_id: uuid.UUID) -> None:
+    """Bind only `app.current_business_id`, for guest/public routes.
+
+    A guest has no identity. Public handlers resolve the business from the URL
+    slug (the `businesses` policy has a public-visibility arm for exactly this)
+    and then call here so subsequent reads of the tenant's offerings, website,
+    availability, etc. pass their RLS policies.
+    """
+    if not _RLS_ENFORCING:
+        return
+    await session.execute(
+        text("SELECT set_config('app.current_business_id', :bid, false)"),
+        {"bid": str(business_id)},
+    )
+    await session.execute(text("SELECT set_config('app.current_identity_id', '', false)"))
 
 
 def _empty_personal_context(
@@ -119,6 +160,13 @@ async def resolve_request_context(
 ) -> RequestContext:
     identity = await IdentityService.bootstrap_identity(session, supabase_user_id, email)
     await session.flush()
+
+    # RLS (AUD-02): bind the identity GUC now, before any membership / business
+    # / admin-grant lookup below. Those tables are row-level scoped, and the
+    # `identity_id = current_identity_id()` policy arm is what lets this
+    # function resolve the caller's own memberships to build the context.
+    # `current_business_id` stays unset until a business context is confirmed.
+    await bind_session_context(session, identity.id, None)
 
     active_context, business_id, location_id = _parse_business_context(request)
     membership_info = None
