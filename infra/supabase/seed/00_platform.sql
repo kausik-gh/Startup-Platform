@@ -21,7 +21,20 @@ INSERT INTO module_definitions (id, name, module_class, description, dependencie
 ('leads', 'Leads', 'optional', 'Lead pipeline', '{core-business-profile}'),
 ('inventory', 'Inventory', 'optional', 'Stock management', '{offerings-catalog}'),
 ('fulfilment', 'Fulfilment', 'optional', 'Delivery and pickup', '{orders,inventory}'),
-('workforce', 'Workforce', 'optional', 'Staff and provider management', '{core-team-access}')
+('workforce', 'Workforce', 'optional', 'Staff and provider management', '{core-team-access}'),
+-- Later / Future optional modules (Doc 11 §18.2 — registered with canonical IDs,
+-- no entitlement or activation at First Launch; launch depth is release config).
+('queue-operations', 'Queue Operations', 'optional', 'Walk-in queue and token management', '{core-team-access}'),
+('invoicing', 'Invoicing', 'optional', 'Invoices and receivables', '{core-business-profile}'),
+('loyalty', 'Loyalty', 'optional', 'Points, tiers, and rewards', '{customer-relationships}'),
+('payroll', 'Payroll', 'optional', 'Compensation and payout coordination', '{workforce}'),
+('messaging', 'Messaging', 'optional', 'External messaging channels', '{core-notifications}'),
+('marketing', 'Marketing', 'optional', 'Campaigns and promotional audiences', '{customer-relationships}'),
+('reviews', 'Reviews', 'optional', 'Transaction-linked feedback', '{orders}'),
+('analytics', 'Analytics', 'optional', 'Business reporting and insights', '{core-workspace}'),
+('business-passport', 'Business Passport', 'optional', 'Verified credential dossier', '{core-business-profile}'),
+('business-community', 'Business Community', 'optional', 'Community posts and follows', '{core-marketplace-presence}'),
+('b2b-network', 'B2B Network', 'optional', 'Supplier and partner discovery', '{core-business-profile}')
 ON CONFLICT (id) DO NOTHING;
 
 -- Website section types — canonical structured sections (Doc 12 §11.1, §18.2)
