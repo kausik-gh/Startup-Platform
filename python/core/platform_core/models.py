@@ -175,6 +175,10 @@ class WebsiteVersion(Base):
     generated_by: Mapped[str | None] = mapped_column(Text, nullable=True)
     generation_job_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # AUD-08: set when a newer draft soft-replaces this one. Exactly one draft
+    # row per website has superseded_at IS NULL (enforced by a partial unique
+    # index) — that is "the current draft", no created_at ordering needed.
+    superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.gates import assert_business_mutable
@@ -120,7 +120,18 @@ class WebsiteService:
         generated_by: str,
         generation_job_id: uuid.UUID | None,
     ) -> WebsiteVersion:
-        # Soft-replace: create a new draft version and orphan the previous draft.
+        # Soft-replace: mark the current live draft superseded, then insert the
+        # new one. Both in this transaction, so the partial unique index
+        # (one live draft per website) sees a clean hand-off. AUD-08.
+        await session.execute(
+            update(WebsiteVersion)
+            .where(
+                WebsiteVersion.website_id == website.id,
+                WebsiteVersion.version_type == "draft",
+                WebsiteVersion.superseded_at.is_(None),
+            )
+            .values(superseded_at=func.now())
+        )
         draft = WebsiteVersion(
             website_id=website.id,
             business_id=business_id,

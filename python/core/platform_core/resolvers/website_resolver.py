@@ -35,14 +35,16 @@ class WebsiteResolver:
     async def resolve_draft_version(
         session: AsyncSession, *, business_id: uuid.UUID, website_id: uuid.UUID
     ) -> WebsiteVersion:
+        # AUD-08: the live draft is the one not yet superseded. A partial unique
+        # index guarantees there is at most one, so this needs no ordering and
+        # cannot pick the wrong row under a created_at tie.
         result = await session.execute(
-            select(WebsiteVersion)
-            .where(
+            select(WebsiteVersion).where(
                 WebsiteVersion.website_id == website_id,
                 WebsiteVersion.business_id == business_id,
                 WebsiteVersion.version_type == "draft",
+                WebsiteVersion.superseded_at.is_(None),
             )
-            .order_by(WebsiteVersion.created_at.desc())
         )
         version = result.scalars().first()
         if version is None:
