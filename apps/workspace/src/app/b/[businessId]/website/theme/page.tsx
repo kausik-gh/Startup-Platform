@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { saveThemeNav } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -21,9 +22,17 @@ export default async function WebsiteThemePage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
-  const theme = res.data.draft.theme || {}
-  const navigation = res.data.draft.navigation || []
+  const res = await apiTry<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Theme, Navigation & Branding" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Website" />
+      </div>
+    )
+  }
+  const theme = res.data.data.draft.theme || {}
+  const navigation = res.data.data.draft.navigation || []
 
   return (
     <div>

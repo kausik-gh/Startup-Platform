@@ -1,18 +1,18 @@
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 
 export const dynamic = 'force-dynamic'
 
-type ProfileResponse = {
-  data: {
-    display_name?: string
-    tagline?: string | null
-    description?: string | null
-    contact?: Record<string, unknown>
-  }
+type Profile = {
+  display_name?: string
+  tagline?: string | null
+  description?: string | null
+  contact?: Record<string, unknown>
 }
 
+/** CORE-002 Business Profile. */
 export default async function BusinessProfilePage({
   params,
 }: {
@@ -21,35 +21,38 @@ export default async function BusinessProfilePage({
   const token = await getAccessToken()
   if (!token) redirect('/login')
 
-  let profile: ProfileResponse['data'] | null = null
-  try {
-    const res = await apiGet<ProfileResponse>(
-      `/v1/platform/businesses/${params.businessId}/profile`,
-      token
+  const res = await apiTry<{ data: Profile }>(
+    `/v1/platform/businesses/${params.businessId}/profile`,
+    token
+  )
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Business Profile" />
+        <GateNotice
+          error={res.error}
+          businessId={params.businessId}
+          moduleLabel="the Business Profile"
+        />
+      </div>
     )
-    profile = res.data
-  } catch {
-    profile = null
   }
+  const profile = res.data.data
 
   return (
     <div>
-      <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Business Profile</h1>
-      <p style={{ marginBottom: '1.25rem' }}>
-        Canonical public facts for your Business (CORE-002).
-      </p>
-      {profile ? (
-        <dl style={{ maxWidth: '36rem', lineHeight: 1.6 }}>
-          <dt style={{ fontWeight: 700 }}>Display name</dt>
-          <dd>{profile.display_name || '—'}</dd>
-          <dt style={{ fontWeight: 700, marginTop: '0.75rem' }}>Tagline</dt>
-          <dd>{profile.tagline || '—'}</dd>
-          <dt style={{ fontWeight: 700, marginTop: '0.75rem' }}>Description</dt>
-          <dd>{profile.description || '—'}</dd>
-        </dl>
-      ) : (
-        <p>Profile could not be loaded.</p>
-      )}
+      <PageHeader
+        title="Business Profile"
+        subtitle="Canonical public facts for your Business."
+      />
+      <dl style={{ maxWidth: '36rem', lineHeight: 1.6 }}>
+        <dt style={{ fontWeight: 700 }}>Display name</dt>
+        <dd>{profile.display_name || '—'}</dd>
+        <dt style={{ fontWeight: 700, marginTop: '0.75rem' }}>Tagline</dt>
+        <dd>{profile.tagline || '—'}</dd>
+        <dt style={{ fontWeight: 700, marginTop: '0.75rem' }}>Description</dt>
+        <dd>{profile.description || '—'}</dd>
+      </dl>
     </div>
   )
 }

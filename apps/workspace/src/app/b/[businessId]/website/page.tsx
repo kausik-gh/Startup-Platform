@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,8 +24,16 @@ export default async function WebsiteOverviewPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
-  const { website, draft } = res.data
+  const res = await apiTry<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Website Overview" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Website" />
+      </div>
+    )
+  }
+  const { website, draft } = res.data.data
   const base = `/b/${params.businessId}/website`
 
   return (

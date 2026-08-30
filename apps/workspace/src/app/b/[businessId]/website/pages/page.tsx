@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { SectionEditor } from './SectionEditor'
 
 export const dynamic = 'force-dynamic'
@@ -30,7 +31,15 @@ export default async function WebsitePagesPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
+  const res = await apiTry<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Pages & Structured Content" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Website" />
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -38,7 +47,7 @@ export default async function WebsitePagesPage({
       <p style={{ marginBottom: '1.25rem', maxWidth: '42rem' }}>
         CORE-005 — edit platform-defined sections only. No arbitrary HTML or custom section types.
       </p>
-      {res.data.draft.pages.map((page) => (
+      {res.data.data.draft.pages.map((page) => (
         <section
           key={page.id}
           style={{

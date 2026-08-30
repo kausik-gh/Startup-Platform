@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiGet } from '@/lib/api'
+import { apiTry } from '@/lib/api'
+import { GateNotice, PageHeader } from '@/components/ModuleState'
 import { publishWebsite, generatePreviewToken } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -20,7 +21,15 @@ export default async function WebsitePublishPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
-  const res = await apiGet<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
+  const res = await apiTry<WebsiteResponse>(`/v1/b/${params.businessId}/website`, token)
+  if (!res.ok) {
+    return (
+      <div>
+        <PageHeader title="Preview & Publish" />
+        <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Website" />
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -30,10 +39,10 @@ export default async function WebsitePublishPage({
         a published version after readiness validation. Generation never auto-publishes.
       </p>
       <p>
-        Current status: <strong>{res.data.website.status}</strong>
+        Current status: <strong>{res.data.data.website.status}</strong>
       </p>
       <ul>
-        {res.data.draft.pages.map((p) => (
+        {res.data.data.draft.pages.map((p) => (
           <li key={p.slug}>
             {p.title} /{p.slug}
           </li>
