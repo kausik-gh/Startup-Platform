@@ -4,28 +4,16 @@
     {
       "name": "dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["run", "dev"],
       "port": 3000
-    },
-    {
-      "name": "workspace",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@platform/workspace",
-        "run",
-        "dev"
-      ],
-      "port": 3001
     },
     {
       "name": "api",
       "runtimeExecutable": "uv",
       "runtimeArgs": [
         "run",
+        "--env-file",
+        ".env",
         "uvicorn",
         "platform_api.main:app",
         "--app-dir",
