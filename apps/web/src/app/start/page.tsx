@@ -48,7 +48,7 @@ export default async function StartPage() {
       <Steps current={1} />
       <h1 style={{ fontSize: '2rem', margin: '0 0 0.6rem' }}>Set up your business</h1>
       <p style={{ color: '#3c4855', lineHeight: 1.65, margin: '0 0 2rem', maxWidth: '34rem' }}>
-        Two details to start. As soon as you submit, we create your business and build your
+        A few details to start. As soon as you submit, we create your business and build your
         website — you&apos;ll see it on the next screen.
       </p>
       <StartForm types={res.data.data || []} />
