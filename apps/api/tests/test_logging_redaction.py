@@ -36,6 +36,22 @@ def test_credential_keys_are_redacted() -> None:
     assert out["safe"] == "keep-me"
 
 
+def test_supabase_service_role_key_is_redacted() -> None:
+    out = _run(
+        {
+            "event": "config",
+            "SUPABASE_SERVICE_ROLE_KEY": "eyJ...service_role...",
+            "service_role_key": "eyJ...",
+            "service_key": "abc",
+            "supabase_anon_key": "eyJ...anon...",  # public — must NOT be touched
+        }
+    )
+    assert out["SUPABASE_SERVICE_ROLE_KEY"] == "***redacted***"
+    assert out["service_role_key"] == "***redacted***"
+    assert out["service_key"] == "***redacted***"
+    assert out["supabase_anon_key"] == "eyJ...anon..."
+
+
 def test_redaction_is_recursive_through_dicts_and_lists() -> None:
     out = _run(
         {

@@ -44,6 +44,8 @@ _REDACT_KEY_SUBSTRINGS: tuple[str, ...] = (
     "raw_body",
     "signature",
     "encrypted_password",
+    "service_role",  # SUPABASE_SERVICE_ROLE_KEY, service_role_key
+    "service_key",
 )
 _REDACTED = "***redacted***"
 
