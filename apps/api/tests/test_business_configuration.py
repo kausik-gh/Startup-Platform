@@ -99,7 +99,10 @@ def test_list_and_get_type_profiles(owner: tuple[dict[str, str], uuid.UUID]) -> 
         data = profile.json()["data"]
         assert data["type_id"] == "restaurant"
         assert data["terminology"]["customer"] == "Guest"
-        assert any(seed["module_id"] == "catalog-orders" for seed in data["module_seeds"])
+        # Recommendations must name modules that actually exist and can be
+        # enabled — "catalog-orders" was a stale id that 403'd on enable.
+        seeded = {seed["module_id"] for seed in data["module_seeds"]}
+        assert {"offerings-catalog", "orders"} <= seeded
 
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")

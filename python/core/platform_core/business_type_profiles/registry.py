@@ -63,7 +63,7 @@ _PLATFORM_DEFAULT = _profile(
     characteristics=("provides_services", "has_team"),
     modules=(
         ("core-website", "Establish public presence", 1),
-        ("crm", "Manage customer relationships", 2),
+        ("customer-relationships", "Manage customer relationships", 2),
     ),
     terminology={
         "customer": "Customer",
@@ -91,10 +91,11 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         ),
         modules=(
             ("core-website", "Publish menu and location information", 1),
-            ("catalog-orders", "Receive and manage orders", 2),
-            ("booking-calendar", "Table reservations", 3),
-            ("delivery", "Delivery and pickup coordination", 4),
-            ("crm", "Guest relationship management", 5),
+            ("offerings-catalog", "Publish your menu", 2),
+            ("orders", "Receive and manage orders", 3),
+            ("bookings", "Table reservations", 4),
+            ("fulfilment", "Delivery and pickup coordination", 5),
+            ("customer-relationships", "Guest relationship management", 6),
         ),
         terminology={
             "customer": "Guest",
@@ -112,9 +113,9 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
             location_behavior="physical_required",
         ),
         navigation=_nav(
-            ("kitchen", "Kitchen & Orders", ("catalog-orders",)),
-            ("front_of_house", "Front of House", ("booking-calendar", "crm")),
-            ("fulfilment", "Fulfilment", ("delivery",)),
+            ("kitchen", "Kitchen & Orders", ("offerings-catalog", "orders")),
+            ("front_of_house", "Front of House", ("bookings", "customer-relationships")),
+            ("fulfilment", "Fulfilment", ("fulfilment",)),
         ),
     ),
     "cafe": _profile(
@@ -125,9 +126,10 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("sells_products", "accepts_orders", "delivers"),
         modules=(
             ("core-website", "Publish menu and availability", 1),
-            ("catalog-orders", "Manage orders", 2),
-            ("delivery", "Pickup and delivery", 3),
-            ("crm", "Customer communication", 4),
+            ("offerings-catalog", "Publish your menu", 2),
+            ("orders", "Manage orders", 3),
+            ("fulfilment", "Pickup and delivery", 4),
+            ("customer-relationships", "Customer communication", 5),
         ),
         terminology={
             "customer": "Customer",
@@ -152,10 +154,11 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("sells_products", "accepts_orders", "has_physical_locations"),
         modules=(
             ("core-website", "Storefront presence", 1),
-            ("catalog-orders", "Product catalogue and orders", 2),
-            ("inventory", "Stock management", 3),
-            ("delivery", "Shipping and pickup", 4),
-            ("crm", "Customer retention", 5),
+            ("offerings-catalog", "Product catalogue", 2),
+            ("orders", "Receive and manage orders", 3),
+            ("inventory", "Stock management", 4),
+            ("fulfilment", "Shipping and pickup", 5),
+            ("customer-relationships", "Customer retention", 6),
         ),
         terminology={
             "customer": "Customer",
@@ -180,9 +183,9 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("provides_services", "accepts_appointments", "has_team"),
         modules=(
             ("core-website", "Services and provider information", 1),
-            ("appointments", "Appointment scheduling", 2),
-            ("booking-calendar", "Provider availability", 3),
-            ("crm", "Patient follow-up", 4),
+            ("bookings", "Appointment scheduling", 2),
+            ("workforce", "Provider availability", 3),
+            ("customer-relationships", "Patient follow-up", 4),
         ),
         terminology={
             "customer": "Patient",
@@ -208,8 +211,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         modules=(
             ("core-website", "Membership and class presentation", 1),
             ("memberships", "Membership plans", 2),
-            ("booking-calendar", "Classes and sessions", 3),
-            ("crm", "Member relationships", 4),
+            ("bookings", "Classes and sessions", 3),
+            ("customer-relationships", "Member relationships", 4),
         ),
         terminology={
             "customer": "Member",
@@ -233,8 +236,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("provides_services", "accepts_appointments", "has_team"),
         modules=(
             ("core-website", "Services and team presentation", 1),
-            ("booking-calendar", "Appointment scheduling", 2),
-            ("crm", "Client follow-up", 3),
+            ("bookings", "Appointment scheduling", 2),
+            ("customer-relationships", "Client follow-up", 3),
         ),
         terminology={
             "customer": "Client",
@@ -258,8 +261,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("provides_services", "accepts_appointments", "has_team"),
         modules=(
             ("core-website", "Treatments and wellness presentation", 1),
-            ("booking-calendar", "Treatment appointments", 2),
-            ("crm", "Guest wellness journey", 3),
+            ("bookings", "Treatment appointments", 2),
+            ("customer-relationships", "Guest wellness journey", 3),
         ),
         terminology={
             "customer": "Guest",
@@ -283,8 +286,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("provides_services", "accepts_appointments", "has_physical_locations"),
         modules=(
             ("core-website", "Property and room presentation", 1),
-            ("booking-calendar", "Room reservations", 2),
-            ("crm", "Guest relationships", 3),
+            ("bookings", "Room reservations", 2),
+            ("customer-relationships", "Guest relationships", 3),
         ),
         terminology={
             "customer": "Guest",
@@ -308,8 +311,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("provides_services", "accepts_appointments"),
         modules=(
             ("core-website", "Listing and availability", 1),
-            ("booking-calendar", "Stay reservations", 2),
-            ("crm", "Guest communication", 3),
+            ("bookings", "Stay reservations", 2),
+            ("customer-relationships", "Guest communication", 3),
         ),
         terminology={
             "customer": "Guest",
@@ -333,8 +336,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("runs_classes", "accepts_appointments", "has_team"),
         modules=(
             ("core-website", "Classes and schedule", 1),
-            ("booking-calendar", "Class bookings", 2),
-            ("crm", "Member and attendee management", 3),
+            ("bookings", "Class bookings", 2),
+            ("customer-relationships", "Member and attendee management", 3),
         ),
         terminology={
             "customer": "Member",
@@ -355,8 +358,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         modules=(
             ("core-website", "Credibility and services", 1),
             ("leads", "Enquiry capture", 2),
-            ("booking-calendar", "Consultation scheduling", 3),
-            ("crm", "Client relationships", 4),
+            ("bookings", "Consultation scheduling", 3),
+            ("customer-relationships", "Client relationships", 4),
         ),
         terminology={
             "customer": "Client",
@@ -380,8 +383,8 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("runs_classes", "has_team"),
         modules=(
             ("core-website", "Programs and courses", 1),
-            ("booking-calendar", "Classes and cohorts", 2),
-            ("crm", "Learner relationships", 3),
+            ("bookings", "Classes and cohorts", 2),
+            ("customer-relationships", "Learner relationships", 3),
         ),
         terminology={
             "customer": "Learner",
@@ -401,7 +404,7 @@ _PROFILES: dict[str, BusinessTypeProfile] = {
         characteristics=("provides_services",),
         modules=(
             ("core-website", "Establish public presence", 1),
-            ("crm", "Manage customer relationships", 2),
+            ("customer-relationships", "Manage customer relationships", 2),
         ),
         terminology={
             "customer": "Customer",
