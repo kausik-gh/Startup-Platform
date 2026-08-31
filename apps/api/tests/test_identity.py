@@ -56,8 +56,13 @@ def test_me_rejects_expired_token(monkeypatch: Any) -> None:
         assert response.json()["detail"] == "Token has expired"
 
 
-def test_me_requires_configured_jwt_secret(monkeypatch: Any) -> None:
+def test_me_hs256_token_without_configured_secret_is_401(monkeypatch: Any) -> None:
+    # Dual-mode verifier: an HS256 token it cannot check (no SUPABASE_JWT_SECRET,
+    # and no JWKS config for this alg) is an unverifiable token -> 401, not a
+    # 500. The operator sees `jwt.verifier_misconfigured` in the logs.
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+    monkeypatch.delenv("SUPABASE_URL", raising=False)
+    monkeypatch.delenv("SUPABASE_JWKS_URL", raising=False)
     token = _make_token()
 
     with TestClient(app) as client:
@@ -65,5 +70,5 @@ def test_me_requires_configured_jwt_secret(monkeypatch: Any) -> None:
             "/me",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 500
-        assert response.json()["detail"] == "JWT secret not configured"
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid token"

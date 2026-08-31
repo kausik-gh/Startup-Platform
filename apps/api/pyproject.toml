@@ -8,7 +8,7 @@ dependencies = [
     "uvicorn>=0.27.0",
     "platform-core",
     "platform-domain-events",
-    "pyjwt>=2.13.0",
+    "pyjwt[crypto]>=2.13.0",
 ]
 
 [project.optional-dependencies]

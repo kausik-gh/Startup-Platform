@@ -18,6 +18,13 @@ import os
 
 os.environ.setdefault("RATE_LIMIT_ENABLED", "0")
 
+# The suite mints its own HS256 tokens; nothing here exercises the ES256 / JWKS
+# path. Drop any real SUPABASE_URL / SUPABASE_JWKS_URL from the environment so
+# the API-startup JWKS warm (main.py lifespan) never makes a network call.
+# test_jwt_verify.py stubs the JWKS client and manages these vars itself.
+os.environ.pop("SUPABASE_URL", None)
+os.environ.pop("SUPABASE_JWKS_URL", None)
+
 # AUD-11: keep the per-request INFO line ("request.completed") out of the test
 # transcript. WARN/ERROR — gate denials, 5xx, webhook signature rejections —
 # still print, and the redaction filter is exercised directly by

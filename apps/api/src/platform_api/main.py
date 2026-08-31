@@ -26,6 +26,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
     configure_logging()
     get_logger("platform_api").info("api.startup", rate_limit=os.getenv("RATE_LIMIT_ENABLED", "1") != "0")
 
+    # Warm the Supabase JWKS cache so the first authenticated request doesn't
+    # pay the fetch. Best-effort; the ES256 verify path retries on miss.
+    from anyio import to_thread
+
+    from platform_api.jwt_verify import warm_jwks_cache
+
+    await to_thread.run_sync(warm_jwks_cache)
+
     if os.getenv("DATABASE_URL"):
         try:
             # role="user" → the NOBYPASSRLS platform_api connection. The API

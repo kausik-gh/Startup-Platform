@@ -1,10 +1,9 @@
-import os
 import uuid
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,25 +162,28 @@ async def verify_jwt_payload(
 ) -> dict[str, Any]:
     if credentials is None:
         raise AuthenticationRequired()
-    secret = os.getenv("SUPABASE_JWT_SECRET")
-    if not secret:
-        raise HTTPException(status_code=500, detail="JWT secret not configured")
-    import jwt
+
+    from anyio import to_thread
+
+    from platform_api.jwt_verify import (
+        JWTExpiredError,
+        JWTVerificationError,
+        verify_supabase_jwt,
+    )
 
     try:
-        payload = jwt.decode(
-            credentials.credentials,
-            secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
+        # Blocking (the ES256 path may hit the JWKS endpoint) — off the loop.
+        payload: dict[str, Any] = await to_thread.run_sync(
+            verify_supabase_jwt, credentials.credentials
         )
-        if not payload.get("sub") or not payload.get("email"):
-            raise AuthenticationRequired("Invalid token payload")
-        return payload
-    except jwt.ExpiredSignatureError:
+    except JWTExpiredError:
         raise SessionExpired()
-    except jwt.InvalidTokenError:
+    except JWTVerificationError:
         raise AuthenticationRequired("Invalid token")
+
+    if not payload.get("sub") or not payload.get("email"):
+        raise AuthenticationRequired("Invalid token payload")
+    return payload
 
 
 async def get_request_context(

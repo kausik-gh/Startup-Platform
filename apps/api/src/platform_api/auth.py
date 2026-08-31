@@ -1,11 +1,15 @@
-import os
 import uuid
-import jwt
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+from platform_api.jwt_verify import (
+    JWTExpiredError,
+    JWTVerificationError,
+    verify_supabase_jwt,
+)
 
 security = HTTPBearer()
 
@@ -19,42 +23,29 @@ class RequestContext(BaseModel):
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> RequestContext:
-    token = credentials.credentials
-    secret = os.getenv("SUPABASE_JWT_SECRET")
-
-    if not secret:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="JWT secret not configured",
-        )
-
+    # Dual-mode: ES256 (Supabase JWT Signing Keys, via JWKS) or legacy HS256.
+    # This is a sync dependency, so FastAPI already runs it in a worker thread —
+    # the JWKS fetch inside verify_supabase_jwt does not block the event loop.
     try:
-        # Supabase JWTs use HS256 and their audience is typically "authenticated"
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False},  # Or verify_aud=True, aud="authenticated"
-        )
-
-        auth_user_id_str = payload.get("sub")
-        email = payload.get("email")
-
-        if not auth_user_id_str or not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload",
-            )
-
-        return RequestContext(auth_user_id=uuid.UUID(auth_user_id_str), email=email)
-
-    except jwt.ExpiredSignatureError:
+        payload = verify_supabase_jwt(credentials.credentials)
+    except JWTExpiredError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
         )
-    except jwt.InvalidTokenError:
+    except JWTVerificationError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
+
+    auth_user_id_str = payload.get("sub")
+    email = payload.get("email")
+
+    if not auth_user_id_str or not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    return RequestContext(auth_user_id=uuid.UUID(auth_user_id_str), email=email)

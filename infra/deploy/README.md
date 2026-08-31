@@ -74,7 +74,23 @@ Each Next app (`apps/web`, `apps/workspace`, `apps/admin`) loads `.env` from
 `NEXT_PUBLIC_WEB_URL`, `NEXT_PUBLIC_SUPABASE_URL`,
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` per app (or via your platform's env injection).
 
-## 6. Backup / restore
+## 6. API auth / JWT verification
+
+The API verifies Supabase access tokens in dual mode (`platform_api.jwt_verify`):
+
+- **ES256 / asymmetric** (the hosted project's current signing key) — verified
+  against the JWKS public keys at `<SUPABASE_URL>/auth/v1/.well-known/jwks.json`.
+  **`SUPABASE_URL` must be set** in the API environment, and the API process
+  needs outbound HTTPS to `*.supabase.co`. Keys are cached in-process
+  (300s) and warmed at startup.
+- **HS256 / legacy** — verified with `SUPABASE_JWT_SECRET` (the *Legacy JWT
+  Secret* from the dashboard, not the Key ID). Covers pre-migration tokens still
+  in their TTL. Optional if the project has fully migrated.
+
+A token whose `alg` has no configured verifier → 401 plus a
+`jwt.verifier_misconfigured` WARN log.
+
+## 7. Backup / restore
 
 **Not yet documented — blocked on a founder decision** (recovery-time
 objective, who owns running the restore drill). Supabase provides managed
