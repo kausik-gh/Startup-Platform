@@ -32,6 +32,9 @@ export function isValidDestinationIntent(destination: string | null | undefined)
     '/admin',
     '/b/',
     '/me',
+    // Business onboarding: someone who picks "I run a business" on the
+    // homepage is sent to /login?destination=/start and must land back here.
+    '/start',
   ]
   return pathPrefixes.some(
     (prefix) => trimmed === prefix || trimmed.startsWith(prefix)
