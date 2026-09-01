@@ -2,8 +2,8 @@
 
 **Document:** 11  
 **Document Status:** Canonical launch-scope and implementation-planning specification  
-**Version:** 1.0  
-**Date:** July 2026  
+**Version:** 1.1  
+**Date:** July 2026 (Version 1.1 amendment: September 1, 2026)  
 **Authority:** Governing definition of the platform's First Launch Version, launch capability depth, deliberate deferrals, implementation sequence, and launch-readiness gates  
 **Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md` · `09-complete-page-by-page-product-experience.md` · `10-data-and-technical-architecture.md` Version 1.1  
 **Terminology:** **First Launch Version** is the governing term. “MVP” appears only when referencing older documents whose relevance labels or decisions use that term.
@@ -17,6 +17,7 @@
 | Version | Date | Change |
 |---|---|---|
 | 1.0 | July 2026 | Initial canonical First Launch scope, module-depth classification, reference-workflow validation, and dependency-aware implementation plan. |
+| 1.1 | September 1, 2026 | Additive amendment (Website Generation Overhaul work order), recorded per Document 08 §25.3 — decisions made now. §6.2 gains the AI content-authorship boundary, the one-shot questionnaire-driven generation model, and the design-reference-translation rule for prebuilt templates; §13.2 cross-references them. `FL-DEC-015` remains open (temporary founder-authorized Gemini key in place). No First Launch scope, module-depth, or sequencing change. |
 
 ## 0.2 Governance Order
 
@@ -480,6 +481,25 @@ The generated result:
 - cannot purchase, enable, or authorize optional modules without explicit action;
 - must degrade to deterministic templates if the AI provider is unavailable;
 - must not block Business creation or later manual editing.
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). Decided now.**
+>
+> - **AI authors content only.** The generated result's copy, image selection,
+>   layout-variant choice, and section ordering are AI-authored; cart/checkout,
+>   stock display, navigation semantics, and order/booking confirmation are fixed
+>   platform code and are never AI-authored. (Document 12 §12.6.)
+> - **One call, driven by a questionnaire.** Generation is fed by a skippable,
+>   business-type-aware questionnaire and makes exactly one provider call per
+>   Business — not a conversation with the owner. Skipped fields use the
+>   deterministic fallback, not a second call. This was chosen deliberately to keep
+>   cost bounded and output safe. (Document 12 §12.7.)
+> - **Templates are design references.** A prebuilt template is translated into a
+>   theme definition and new layout variants for existing section types; raw
+>   external HTML/CSS/JS is never rendered. The pipeline is idle until a founder
+>   supplies an export. (Document 12 §12.8.)
+> - `FL-DEC-015` stays open. A temporary founder-authorized Gemini key is in place;
+>   the provider, budget, and fallback policy still require formal closure. The
+>   deterministic fallback remains mandatory regardless.
 
 ## 6.3 Platform Commercial Essentials
 
@@ -1110,6 +1130,8 @@ The Website adapts to the Business through:
 - module-contributed Offerings, cart/checkout, booking, membership, and enquiry experiences.
 
 The same universal page structure is not forced on every Business. A lead-driven professional site may emphasize services and enquiries; a supermarket emphasizes Products and Orders; a hotel emphasizes Rooms and Reservations.
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3).** The AI's role in producing this adaptive structure is bounded to content: copy, image selection, layout-variant choice, and section ordering. The platform mechanics behind cart/checkout, stock display, navigation, and confirmation are fixed code, identical for every Business. Generation is a one-shot questionnaire, not a chat. See §6.2 and Document 12 §12.6–§12.8.
 
 ## 13.3 Publishing and Discovery Contract
 

@@ -2,10 +2,17 @@
 
 **Document:** 09  
 **Document Status:** Canonical experience inventory  
-**Version:** 1.1  
-**Date:** July 2026  
+**Version:** 1.2  
+**Date:** July 2026 (Version 1.2 amendment: September 1, 2026)  
 **Authority:** Practical page and page-family experience across public, consumer, Business, and Platform Super Admin surfaces  
 **Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md`
+
+**Document Control**
+
+| Version | Date | Change |
+|---|---|---|
+| 1.1 | July 2026 | Canonical experience inventory. |
+| 1.2 | September 1, 2026 | Additive amendment (Website Generation Overhaul & Workspace Cleanup work order), recorded per Document 08 §25.3 — decisions made now, not retroactively. Sharpens §5.1 and §5.4 with the AI content-authorship boundary and the one-shot structured-intake generation model; adds §9.1.1 documenting the inline click-to-edit interaction pattern for `CORE-005`/`CORE-006`/`CORE-007`; extends the §19 Conflict Register entry for the Website builder model. No page added or removed; no relevance-label change. |
 
 ---
 
@@ -366,6 +373,27 @@ This keeps generation practical, costs controlled, responsiveness reliable, modu
 
 Platform Super Admin may currently make deeper attributable custom modifications when required. This remains a support capability—not an agency/reseller system. Self-service may expand later without abandoning structured, reliable output.
 
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). The following was decided now.**
+>
+> **AI authors content, never platform mechanics.** AI-assisted generation produces
+> copy, chooses images from supplied/curated assets, picks a layout variant from a
+> section type's existing allowed variants, and orders sections — all within the
+> structured system above. It never authors cart/checkout behaviour, stock or
+> availability display, navigation/route semantics, or order/booking confirmation.
+> Those are fixed, tested code, identical for every Business. (Document 12 §12.6.)
+>
+> **Generation is a questionnaire, not a chat.** A thorough, skippable,
+> business-type-aware questionnaire feeds exactly one generation call per Business.
+> There is no multi-turn conversation with the end user. Every optional field is
+> shown as a concrete suggestion with an example, and any field left blank is filled
+> by the deterministic fallback — never a second AI call. This was a deliberate
+> decision to keep cost bounded and output safe. (Document 12 §12.7.)
+>
+> **Prebuilt templates are design references, not imported code.** Where an external
+> design reference is used, its palette, type, spacing, and section composition are
+> translated into a theme definition and new layout variants for the existing
+> section types. Raw external HTML/CSS/JS is never rendered. (Document 12 §12.8.)
+
 ## 5.5 Multi-Location behavior
 
 One Business normally has one Website.
@@ -550,6 +578,24 @@ The dashboard is `CORE-001` in the inventory and is **MVP Essential**.
 | `CORE-014` Module Detail & Management | Authorized users; benefit, dependency, Entitlement, activation, setup | Trial/purchase if authorized; enable; configure; deactivate | Not entitled, setup required, active, suspended, deprecated | Modules → module pages | MVP Essential |
 | `CORE-015` Notifications | Authorized users; essential Business/platform activity and notification preferences | Read; open destination; mark read; update permitted preferences | Empty/quiet, delivery degradation, restricted destination | Notifications | MVP Essential |
 | `CORE-016` Business Settings | Authorized users; Business-wide configuration and links to module/commercial settings | Open/edit permitted group; review status | Restricted groups, save error, changed-access state | Settings | MVP Essential |
+
+## 9.1.1 Inline click-to-edit in preview (`CORE-005` / `CORE-006` / `CORE-007`)
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). This interaction pattern was decided now and is part of the `CORE-005`/`CORE-006`/`CORE-007` specification.**
+
+In the Workspace website preview (the template-based rendering path), authorized editors can edit in place without leaving the preview:
+
+| Gesture | Target | Behaviour |
+|---|---|---|
+| Single click | An image in a section | Opens the existing image-replace/upload flow; the new asset replaces the current one in place via the existing section content-update API (Asset ID, not a URL). |
+| Double click | Editable text in a section | Opens inline text editing bound to the existing section content-update API; on commit, the same schema validation and content-safety checks as Workspace editing apply. |
+
+Rules:
+
+- This is **additive UI on top of the existing content-update endpoints** — it introduces no new backend logic. If something genuinely required is missing at the API layer, it is flagged as a decision, not silently built.
+- Edits apply to the **draft** version only. Nothing here changes the published site until `CORE-007` publish.
+- The gesture layer respects the same permission checks as the corresponding Workspace editors; a viewer without edit permission sees the preview without edit affordances.
+- Structural changes (adding/removing/reordering sections, changing variants, navigation, theme) remain in the `CORE-005`/`CORE-006` structured editors — click-to-edit covers content within an existing section, not composition.
 
 ## 9.2 Website-management boundary
 
@@ -1281,7 +1327,7 @@ Document 08 normalization governs. The following are genuine older-document conf
 | Team/workforce overlap | Staff roles and operational staff are mixed | Core Team & Access pages are separate from Workforce | Documents 03–06 |
 | Owner navigation | Owner sees all navigation permanently | Owner retains authority, but navigation is progressive and relevant | Document 04; Document 06 `RPA-CONFLICT-002` |
 | Fixed workspace tree | Document 04 presents a broad stable module navigation tree | Workspace navigation adapts to type terminology, enabled modules, permission, and Location | Document 04; Documents 05–06 and this revision govern |
-| Website builder model | Document 04 can imply broad page-builder/template implementation | Standard self-service is AI-generated, structured-section editing with supported variants and controls | Document 04 requires focused experience amendment |
+| Website builder model | Document 04 can imply broad page-builder/template implementation | Standard self-service is AI-generated, structured-section editing with supported variants and controls. **(2026-09-01 amendment)** AI authors content only — copy, image selection, variant choice, section ordering — never platform mechanics (cart, checkout, stock display, navigation semantics, order confirmation); generation is a one-shot questionnaire, not a chat; prebuilt templates are translated into the theme/section-type system, never rendered as raw HTML/JS. See §5.4 and §9.1.1; Document 12 §12.6–§12.8. | Document 04 requires focused experience amendment |
 | Module uninstall | Uninstall may hard-delete module data after a period | Deactivation retains history; deletion is separate | Documents 03–04; Document 05 `KIR-003`/`CONFLICT-005` |
 | Admin impersonation | Admin can impersonate Business owner casually | Attributed Admin investigation/work mode | Document 04; Documents 05–06 govern |
 | Payments/billing boundary | Merchant gateway and platform billing settings can appear conceptually combined | Separate `payments` workspace from Commercial Experience | Document 04; Document 08 §§17–18 |

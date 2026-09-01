@@ -13,6 +13,7 @@
 |---|---|---|
 | 1.0 | July 2026 | Initial canonical implementation blueprint. Converts approved product model and architecture into engineering execution plan. Resolves FL-DEC-010, FL-DEC-011, FL-DEC-012, FL-DEC-013, FL-DEC-014 as engineering decisions. |
 | 1.1 | July 2026 | Controlled correction pass: replaces the Node-oriented pg-boss mismatch with a Python-native PostgreSQL worker built on the transactional outbox; standardizes IDs on UUIDv4; updates Next.js authentication to the current `@supabase/ssr` cookie and Proxy pattern; and records the intentional Document 10 backend supersession by FastAPI/Python. No product, module, launch-scope, application-boundary, stage, or vertical-slice change. |
+| 1.2 | September 1, 2026 | Additive amendment pass (Website Generation Overhaul & Workspace Cleanup work order). Records decisions made now, not retroactively: the AI content-authorship boundary (§12.6), the one-shot structured-intake generation model and its questionnaire (§12.7), and prebuilt-template ingestion as design-reference translation only — Option A (§12.8). Corrects two stale identifiers in §12.1–§12.2 to match the implemented `AIModelProvider.generate_structured` contract and the `platform_core/website/ai_provider.py` module path. No schema change; no change to the 13 seeded SectionTypes; no launch-scope change. `FL-DEC-015` (initial provider, budget, fallback policy) remains open — a temporary founder-authorized Gemini key is in place pending its formal closure. |
 
 
 ---
@@ -1476,6 +1477,14 @@ Owner clicks Preview
 -> No public caching of preview responses
 ```
 
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3).**
+> The template-based preview additionally supports an **inline click-to-edit** layer
+> (Document 09 CORE-005/006/007): click an image to replace it in place, double-click
+> text to edit it inline. Both paths call the **existing** section content-update API
+> with the same schema validation and content-safety checks as Workspace editing —
+> this is additive UI over existing endpoints, not new backend surface. Any genuinely
+> missing endpoint is flagged, not silently added.
+
 ## 11.7 SSR / ISR / Cache Strategy
 
 | Content type | Rendering strategy |
@@ -1510,7 +1519,7 @@ Worker picks up job:
 -> [1] Load BusinessAggregate (read-only)
 -> [2] Assemble generation prompt context
 -> [3] Retrieve applicable SectionTypes and page schemas
--> [4] Call svc-ai-runtime.generate_website_draft(context, schemas)
+-> [4] Call provider.generate_structured(prompt, WEBSITE_GENERATION_SCHEMA, model_config, timeout_seconds)
 -> [5] Validate response against WebsiteGenerationSchema (strict JSON Schema)
 -> [6] Policy validation (no arbitrary code, no external URLs, no excessive claims)
 -> [7] On validation failure: deterministic template repair
@@ -1529,17 +1538,36 @@ Owner:
 -> Explicitly publishes (owner action required)
 ```
 
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3).**
+> Step [4] above previously read `Call svc-ai-runtime.generate_website_draft(context, schemas)`.
+> There is no `generate_website_draft` method and no `svc-ai-runtime` package. The
+> implemented contract is `AIModelProvider.generate_structured(prompt, schema, model_config, timeout_seconds)`
+> (§12.2), invoked once per Business by `platform_core/services/website_generation.py`
+> with `WEBSITE_GENERATION_SCHEMA` and `model_config={"purpose": "website.generate"}`,
+> three attempts with exponential backoff, then `build_deterministic_draft(...)`. The
+> flow is otherwise unchanged. See §12.7 for why this is a single call, not a session.
+
 ## 12.2 Provider Abstraction
 
 ```python
+# Implemented at: python/core/platform_core/website/ai_provider.py
 class AIModelProvider(Protocol):
     async def generate_structured(
         self, prompt: str, schema: dict, model_config: dict, timeout_seconds: int
     ) -> dict: ...
 
-# Provider selection from config: AI_PROVIDER env var
-# Concrete: services/ai_runtime/providers/gemini.py, openai.py
+# get_ai_provider() selects the concrete provider. Until FL-DEC-015 closes it
+# returns UnavailableAIProvider() (callers fall back to build_deterministic_draft).
+# The live Gemini provider activates on GEMINI_API_KEY presence; a second provider
+# would be selected by an AI_PROVIDER env var when added.
 ```
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3).**
+> The comment above previously read `Provider selection from config: AI_PROVIDER env var` /
+> `Concrete: services/ai_runtime/providers/gemini.py, openai.py`. Those paths do not
+> exist. The Protocol lives in `platform_core/website/ai_provider.py`; provider
+> selection is `get_ai_provider()` in the same module. `AI_PROVIDER` is retained as
+> the intended selector once more than one live provider exists, but is not read today.
 
 ## 12.3 Website Generation Schema (summary)
 
@@ -1579,6 +1607,65 @@ website_generation_jobs (
 - AI may not activate modules, grant permissions, or change commercial state.
 - All AI generation jobs are logged with prompt version, provider, model, and outcome.
 - Generation is subject to rate limiting (5 requests/minute/Business default).
+
+## 12.6 AI Content-Authorship Boundary
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). Decided now.**
+
+AI authorship is confined to **content** within already-defined structure. It never authors platform mechanics.
+
+| AI **may** author | AI **never** authors |
+|---|---|
+| Section copy (headlines, body, CTAs, SEO title/description) within each `SectionType.content_schema` | Cart, checkout, and payment flow behaviour |
+| Choice of `layout_variant` from a SectionType's existing `allowed_variants` | Stock / availability display logic |
+| Selection and ordering of sections from the 13 seeded `SectionType`s | Navigation structure semantics, route resolution, reserved-slug handling |
+| Page set and navigation labels within `WEBSITE_GENERATION_SCHEMA` | Order/booking confirmation, tracking, and notification behaviour |
+| `theme_hints` (token *suggestions* within the allowed design-token surface) | Module bindings' data contracts, permission gates, entitlement or commercial state |
+| Image *selection* from Business-supplied or curated assets (by Asset ID) | New `SectionType`s, new layout variants, raw HTML/CSS/JS, external URLs as content |
+
+Platform mechanics are fixed, tested code, identical for every Business, and are wired by the renderer and module contracts — not by generation output. This restates and sharpens §12.5, Document 10 §11.3/§11.4 (ARCH-008), and Document 11 §6.2: generation produces a **draft configuration**, and configuration cannot reach mechanics. A generation response containing anything in the right-hand column is a validation failure and is repaired deterministically, not published.
+
+## 12.7 One-Shot Structured-Intake Generation Model
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). This model was chosen now, deliberately.**
+
+Generation is driven by a **structured questionnaire**, not a conversation. There is exactly **one** `generate_structured` call per Business per generation.
+
+```
+Structured questionnaire (business-type-aware, every field skippable)
+  -> assemble only the answered fields into one prompt context
+  -> ONE provider.generate_structured(prompt, WEBSITE_GENERATION_SCHEMA, model_config, timeout=30)
+     (3 attempts, exponential backoff)
+  -> validate -> map into Page / Section / navigation / theme records as a draft
+  -> any skipped field: deterministic fallback fills it (build_deterministic_draft),
+     never a second AI call
+```
+
+**Why this shape (recorded rationale):**
+
+- **Cost is bounded and predictable** — one call per Business, no open-ended token spend from a chat loop.
+- **Output is bounded and safe** — the model fills a strict JSON Schema once; it is never in a position to negotiate, re-scope, or be steered by end-user free text across turns.
+- **Failure is simple** — one call either validates or falls back deterministically; there is no partial-conversation state to recover.
+
+**Questionnaire rules:**
+
+- Every question maps to content one of the 13 seeded `SectionType`s can actually render. No question asks about a capability the platform has no slot for.
+- Two tiers: **universal** questions (asked for every Business) and **business-type-specific** questions (extending the `business_type_profiles` registry pattern per type).
+- Every field is skippable, and every optional field is presented as a concrete **suggestion with an example**, never a blank box. A skipped field is filled by the existing deterministic fallback.
+- Universal questions cover: logo (upload / generate placeholder / skip), hero image (upload / curated set / generate / skip), tone (concrete slider pairs, e.g. warm ↔ minimal), colour (curated preset palettes — logo-colour extraction is explicitly deferred to a later pass), what to lead with, contact/location display (extending, not duplicating, existing Business/Location data), social links, hours, and words to prefer or avoid.
+- Business-type-specific questions are per-item and all-optional, e.g. home food: per menu item — name, description, optional health benefits, dietary tags, spice level, serving size; salon/spa/services: per service — description, duration hint, differentiator; retail: per product — description, materials/care; clinic/professional: per service — description, what to expect.
+
+**Explicitly out of scope for this pass:** per-field "improve this with AI" helpers, single-section regeneration, and any multi-turn chat with the end user. If those are wanted later they are a separate, recorded decision.
+
+## 12.8 Prebuilt Template Ingestion — Option A (design-reference translation only)
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). Decided now.**
+
+Externally-sourced design references (e.g. a founder-supplied export) are translated into the **existing** theme and `SectionType` system. Raw external HTML / CSS / JS is **never** placed in the rendering path — this is the same rule as §12.5 and Document 10 §11.3, applied to templates.
+
+- **Intake location:** `infra/templates/inbound/` (a founder drops an export here). The pipeline is **idle** until something is present — it never blocks generation or any other work.
+- **Extraction target:** design decisions only — palette, type choices, spacing rhythm, section composition — expressed as (a) a new `theme` definition in `website_versions.theme` JSONB, and (b) new **layout variants** added to existing `SectionType.allowed_variants`.
+- **Boundary:** if an export contains something the current 13 `SectionType`s cannot represent, that is **flagged back for a decision**, not resolved by inventing an arbitrary new section type. New `SectionType`s remain a schema/architecture decision shown before applied (Document 10 §11.3 "Businesses may not define new section types" applies to the pipeline too).
 
 ---
 

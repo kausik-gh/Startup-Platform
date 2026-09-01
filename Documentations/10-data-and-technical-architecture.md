@@ -2,8 +2,8 @@
 
 **Document:** 10
 **Document Status:** Canonical foundation
-**Version:** 1.1
-**Date:** July 2026
+**Version:** 1.2
+**Date:** July 2026 (Version 1.2 amendment: September 1, 2026)
 **Authority:** Technical architecture specification for implementation planning
 **Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md` · `09-complete-page-by-page-product-experience.md`
 **Conflict resolution:** Where Documents 01–08 conflict with later approved decisions in Documents 05–09, this document reflects the latest approved canonical direction. The Conflict Register is in Section 36.
@@ -14,6 +14,7 @@
 |---|---|---|
 | 1.0 | July 2026 | Initial canonical Data & Technical Architecture. |
 | 1.1 | July 12, 2026 | Refined synchronous and event-driven module communication, required durable webhook receipt before acknowledgement, clarified RLS and privileged backend access, and classified implementation-readiness decisions by actual blocking scope. |
+| 1.2 | September 1, 2026 | Additive amendment (Website Generation Overhaul work order), recorded per Document 08 §25.3 — decisions made now. §11.3 and §11.4 gain the AI content-authorship boundary, the one-shot structured-intake generation model, and the design-reference-translation rule for prebuilt templates (Option A). No entity, schema, or contract change. |
 
 ---
 
@@ -658,6 +659,30 @@ AI-assisted Website generation produces **structured Website configuration** (Pa
 3. Published only after explicit Business confirmation
 
 AI-generated content does not bypass normal Website schema validation.
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per Document 08 §25.3). Decided now.**
+>
+> **Content-authorship boundary.** AI authorship is confined to content within
+> already-defined structure: section copy, image *selection* (by Asset ID) from
+> supplied or curated assets, `layout_variant` choice from a section type's existing
+> `allowed_variants`, section ordering, and `theme` token *suggestions*. AI never
+> authors platform mechanics — cart/checkout, stock or availability display,
+> navigation/route semantics, order or booking confirmation, module data bindings,
+> permission gates, entitlement, or commercial state. Those are fixed platform code.
+> A generation response that reaches beyond content fails validation and is repaired
+> deterministically.
+>
+> **One-shot structured intake.** Generation is driven by a skippable,
+> business-type-aware questionnaire that feeds exactly one provider call per Business
+> (`AIModelProvider.generate_structured`, see Document 12 §12.2/§12.7), not a
+> multi-turn conversation. Skipped fields are filled by the deterministic fallback,
+> never a second call. This bounds cost and keeps output safe.
+>
+> **Prebuilt templates (Option A).** External design references are translated into a
+> `WebsiteTheme` definition and additional layout variants for the existing section
+> types. Raw external HTML/CSS/JS is never stored or rendered — this is §11.3
+> applied to the template pipeline. Anything an existing section type cannot
+> represent is flagged for a decision, not resolved by inventing a new section type.
 
 ## 11.5 Rendering Principle
 

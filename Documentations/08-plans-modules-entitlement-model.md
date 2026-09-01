@@ -2,11 +2,18 @@
 
 **Document:** 08  
 **Document Status:** Canonical foundation  
-**Version:** 1.0  
-**Date:** July 2026  
+**Version:** 1.1  
+**Date:** July 2026 (Version 1.1 amendment: September 1, 2026)  
 **Authority:** Platform Core, module classification, plans, Commercial Entitlement, commercial availability, trials, limits, and module commercial lifecycle  
 **Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md`  
 **Working Input:** `module-capability-registry-audit.md` — temporary audit; approved normalization incorporated here
+
+**Document Control**
+
+| Version | Date | Change |
+|---|---|---|
+| 1.0 | July 2026 | Canonical commercial and capability-availability model. |
+| 1.1 | September 1, 2026 | Additive amendment (Website Generation Overhaul work order), recorded per §25.3 discipline — decision made now. Adds anti-pattern §24.13 (AI generation authors platform mechanics). No change to Platform Core, the module registry, plans, or entitlement semantics. |
 
 ---
 
@@ -1320,6 +1327,12 @@ Rejected. Business-to-platform commercial billing and customer-to-Business colle
 ## 24.12 Commercial dependency equals functional dependency
 
 Rejected. Packaging prerequisites must not masquerade as technical necessity.
+
+## 24.13 AI generation authors platform mechanics
+
+> **Amendment — 2026-09-01 (Website Generation Overhaul work order; additive, dated per §25.3 discipline). Recorded now.**
+
+Rejected. AI-assisted Website generation authors **content only** — section copy, image selection from supplied or curated assets, layout-variant choice from a section type's existing allowed variants, and section ordering — within the structured section system. It never authors cart or checkout behaviour, stock/availability display, navigation or route semantics, order/booking confirmation, module data contracts, permission gates, entitlement, or commercial state. Those are fixed, tested platform code, identical for every Business. Generation output is a **draft configuration**; configuration cannot reach mechanics. (Document 09 §5.4, §9.1.1; Document 12 §12.6–§12.8.)
 
 ---
 
