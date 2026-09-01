@@ -53,6 +53,7 @@ export default async function WebsiteOverviewPage({
         ))}
       </ul>
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+        <Link href={`${base}/preview`}>Visual preview & inline edit</Link>
         <Link href={`${base}/pages`}>Edit pages</Link>
         <Link href={`${base}/theme`}>Theme & navigation</Link>
         <Link href={`${base}/publish`}>Preview & publish</Link>
