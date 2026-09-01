@@ -15,7 +15,9 @@ PAYMENT_STATUSES = frozenset({
     "failed", "partially_refunded", "refunded",
 })
 REFUNDABLE_STATUSES = frozenset({"succeeded", "partially_refunded"})
-MERCHANT_STATUSES = frozenset({"not_connected", "pending", "active", "suspended"})
+MERCHANT_STATUSES = frozenset(
+    {"not_connected", "pending", "active", "suspended", "invalid_credentials"}
+)
 PROVIDERS = frozenset({"stub", "razorpay", "cod_only"})
 REASON_MAX = 500
 

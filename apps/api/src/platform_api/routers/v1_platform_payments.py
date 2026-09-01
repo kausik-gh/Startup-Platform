@@ -172,6 +172,67 @@ async def upsert_merchant_connection(
     }
 
 
+class RazorpayConnectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key_id: str = Field(min_length=1, max_length=200)
+    key_secret: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/{business_id}/payments/razorpay/connect")
+async def connect_razorpay(
+    business_id: UUID,
+    body: RazorpayConnectRequest,
+    actor: BusinessActorContext = Depends(
+        require_business_actor(PAYMENTS_MANAGE_CONNECTION, "payments")
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Store the owner's Razorpay Key ID / Key Secret (secret encrypted at
+    rest), then immediately verify them with one live Razorpay call."""
+    await MerchantService.connect_razorpay(
+        session,
+        business_id=business_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+        key_id=body.key_id,
+        key_secret=body.key_secret,
+    )
+    connection = await MerchantService.verify_connection(
+        session,
+        business_id=business_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+    )
+    await session.commit()
+    return {
+        "data": MerchantService.serialize(connection),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.post("/{business_id}/payments/razorpay/verify")
+async def verify_razorpay(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(
+        require_business_actor(PAYMENTS_MANAGE_CONNECTION, "payments")
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    """Re-run the live credential check against the already-stored keys."""
+    connection = await MerchantService.verify_connection(
+        session,
+        business_id=business_id,
+        actor_id=actor.request.identity_id,
+        correlation_id=actor.request.correlation_id,
+    )
+    await session.commit()
+    return {
+        "data": MerchantService.serialize(connection),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
 @router.post("/{business_id}/payments")
 async def create_payment(
     business_id: UUID,

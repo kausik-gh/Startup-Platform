@@ -90,12 +90,23 @@ class PaymentResolver:
 
     @staticmethod
     def serialize_merchant(connection: MerchantConnection) -> dict[str, Any]:
+        metadata = connection.provider_metadata or {}
         return {
             "id": str(connection.id),
             "business_id": str(connection.business_id),
             "provider": connection.provider,
             "status": connection.status,
-            "provider_metadata": connection.provider_metadata or {},
+            "provider_metadata": metadata,
+            # Never the secret. The Key ID is not sensitive and lets the owner
+            # confirm which account is connected.
+            "key_id": metadata.get("key_id"),
+            "has_credentials": connection.encrypted_credentials is not None,
+            "last_verified_at": (
+                connection.last_verified_at.isoformat()
+                if connection.last_verified_at
+                else None
+            ),
+            "verification_error": connection.verification_error,
             "version": connection.version,
             "created_at": connection.created_at.isoformat(),
             "updated_at": connection.updated_at.isoformat(),

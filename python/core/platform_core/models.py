@@ -1000,6 +1000,13 @@ class MerchantConnection(Base):
     provider_metadata: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb")
     )
+    # Fernet ciphertext of the owner's provider API credentials (Razorpay
+    # {key_id, key_secret}). Never plaintext, never serialized to a client.
+    encrypted_credentials: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    verification_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
