@@ -47,10 +47,16 @@ export default async function InventoryPage({
   const qs = searchParams?.stock_status
     ? `?stock_status=${encodeURIComponent(searchParams.stock_status)}`
     : ''
-  const res = await apiTry<{ data: InventoryRow[] }>(
-    `/v1/platform/businesses/${params.businessId}/inventory${qs}`,
-    token
-  )
+  const [res, locRes] = await Promise.all([
+    apiTry<{ data: InventoryRow[] }>(
+      `/v1/platform/businesses/${params.businessId}/inventory${qs}`,
+      token
+    ),
+    apiTry<{ data: LocationRow[] }>(
+      `/v1/platform/businesses/${params.businessId}/locations`,
+      token
+    ),
+  ])
   if (!res.ok) {
     return (
       <div>
@@ -60,11 +66,6 @@ export default async function InventoryPage({
     )
   }
   const records = res.data.data || []
-
-  const locRes = await apiTry<{ data: LocationRow[] }>(
-    `/v1/platform/businesses/${params.businessId}/locations`,
-    token
-  )
   const locations = locRes.ok ? locRes.data.data || [] : []
   const lowCount = records.filter((r) => r.stock_status !== 'in_stock').length
   const base = `/b/${params.businessId}/inventory`

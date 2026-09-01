@@ -12,6 +12,7 @@ import {
   TD,
   TH,
 } from '@/components/ModuleState'
+import { RazorpayConnect } from './RazorpayConnect'
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +33,11 @@ type Payment = {
 type MerchantConnection = {
   provider: string
   status: string
+  key_id?: string | null
+  has_credentials?: boolean
+  last_verified_at?: string | null
+  verification_error?: string | null
+  provider_metadata?: { mode?: string }
 } | null
 
 const STATUSES = ['pending', 'succeeded', 'failed', 'refunded']
@@ -49,7 +55,13 @@ export default async function PaymentsPage({
 
   const base = `/v1/platform/businesses/${params.businessId}`
   const qs = searchParams?.status ? `?status=${encodeURIComponent(searchParams.status)}` : ''
-  const res = await apiTry<{ data: Payment[] }>(`${base}/payments${qs}`, token)
+  const [res, merchantRes] = await Promise.all([
+    apiTry<{ data: Payment[] }>(`${base}/payments${qs}`, token),
+    apiTry<{ data: MerchantConnection }>(
+      `${base}/payments/merchant-connection?provider=razorpay`,
+      token
+    ),
+  ])
   if (!res.ok) {
     return (
       <div>
@@ -59,11 +71,6 @@ export default async function PaymentsPage({
     )
   }
   const payments = res.data.data || []
-
-  const merchantRes = await apiTry<{ data: MerchantConnection }>(
-    `${base}/payments/merchant-connection`,
-    token
-  )
   const merchant = merchantRes.ok ? merchantRes.data.data : null
 
   const settled = payments
@@ -79,7 +86,9 @@ export default async function PaymentsPage({
         subtitle="Every payment attempt against an order, booking, or membership."
       />
 
-      {merchant && merchant.status !== 'connected' ? (
+      <RazorpayConnect businessId={params.businessId} merchant={merchant} />
+
+      {(!merchant || merchant.status !== 'active') ? (
         <p
           style={{
             padding: '0.75rem 1rem',
@@ -87,11 +96,11 @@ export default async function PaymentsPage({
             background: 'rgba(138,109,31,0.1)',
             border: '1px solid rgba(138,109,31,0.3)',
             marginBottom: '1.25rem',
+            fontSize: '0.9rem',
           }}
         >
-          Online payments are not fully connected yet — provider{' '}
-          <strong>{merchant.provider}</strong> is {merchant.status}. Cash and offline settlement
-          still work in the meantime.
+          Online card payments are not live until Razorpay is connected and verified above. Cash
+          and offline settlement still work in the meantime.
         </p>
       ) : null}
 

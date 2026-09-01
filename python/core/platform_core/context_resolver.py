@@ -179,6 +179,8 @@ async def resolve_request_context(
     effective_permissions: frozenset[str] = frozenset()
     effective_entitlements = EntitlementSet()
     module_states: dict[str, ModuleStateInfo] = {}
+    business = None
+    membership = None
 
     is_super_admin = await IdentityService.is_super_admin(session, identity.id)
 
@@ -265,9 +267,16 @@ async def resolve_request_context(
         if location_id and not membership_info.allows_location(location_id):
             raise LocationAccessDenied()
 
-        effective_permissions = await TeamService.resolve_permissions(session, membership)
-        effective_entitlements = await EntitlementService.get_effective(session, business_id)
+        # `business`, `membership` and the module-state rows are already in hand.
+        # Feed them through so the permission and entitlement resolvers don't
+        # re-SELECT the same rows (was ~9 sequential queries here; now ~3).
         raw_states = await ModuleService.get_states(session, business_id)
+        effective_permissions = await TeamService.resolve_permissions(
+            session, membership, business=business
+        )
+        effective_entitlements = await EntitlementService.get_effective(
+            session, business_id, business=business, module_states=raw_states
+        )
         module_states = {
             mid: ModuleStateInfo(
                 module_id=mid,
@@ -295,4 +304,6 @@ async def resolve_request_context(
         module_states=module_states,
         is_super_admin=is_super_admin,
         correlation_id=correlation_id or request.headers.get("X-Correlation-Id") or str(uuid4()),
+        orm_business=business,
+        orm_membership=membership,
     )

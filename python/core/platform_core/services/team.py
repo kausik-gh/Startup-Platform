@@ -190,9 +190,24 @@ class TeamService:
 
     @staticmethod
     async def resolve_permissions(
-        session: AsyncSession, membership: BusinessMembership
+        session: AsyncSession,
+        membership: BusinessMembership,
+        *,
+        business: Business | None = None,
     ) -> frozenset[str]:
-        from platform_core.authorization.resolver import AuthorizationService
+        from platform_core.authorization.resolver import (
+            AuthorizationService,
+            EffectivePermissionResolver,
+        )
+
+        # Perf: when the caller already holds the Business + active membership
+        # (the gate chain in resolve_request_context does), skip the resolver's
+        # re-fetch of both and go straight to the permission-data load.
+        if business is not None:
+            resolved = await EffectivePermissionResolver.resolve_with_parts(
+                session, business=business, membership=membership
+            )
+            return frozenset(resolved.effective_permissions)
 
         perms = await AuthorizationService.effective_permissions(
             session, membership.business_id, membership.identity_id

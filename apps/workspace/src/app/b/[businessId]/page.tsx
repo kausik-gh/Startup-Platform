@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
-import { apiTry } from '@/lib/api'
+import { apiTry, businessHeaders } from '@/lib/api'
 import { PageHeader } from '@/components/ModuleState'
 
 export const dynamic = 'force-dynamic'
@@ -68,8 +68,12 @@ export default async function WorkspaceHomePage({
   if (!token) redirect('/login')
 
   const base = `/b/${params.businessId}`
+  const bh = businessHeaders(params.businessId)
   const [contextRes, businessRes] = await Promise.all([
-    apiTry<{ data: Context }>('/v1/me/context', token),
+    // Business-scoped: without the headers this returns empty permissions /
+    // module_states (personal context), which left every card gate false and
+    // the page permanently stuck on the "new business" checklist.
+    apiTry<{ data: Context }>('/v1/me/context', token, bh),
     apiTry<{ data: Business }>(`/v1/b/${params.businessId}`, token),
   ])
 
@@ -123,12 +127,39 @@ export default async function WorkspaceHomePage({
   const cards: Card[] = []
   let pendingWork = 0
 
-  if (active('orders') && can('orders.read')) {
-    const res = await apiTry<{ data: unknown[] }>(
-      `/v1/platform/businesses/${params.businessId}/orders?status=pending`,
+  const bp = `/v1/platform/businesses/${params.businessId}`
+  const wants = {
+    orders: active('orders') && can('orders.read'),
+    bookings: active('bookings') && can('bookings.read'),
+    leads: active('leads') && can('leads.read'),
+    inventory: active('inventory') && can('inventory.read'),
+  }
+
+  // Everything this page needs beyond context+business, in one parallel round
+  // instead of a six-deep await waterfall (each hop is a full round-trip to the
+  // API and on to the hosted DB).
+  const [ordersR, bookingsR, leadsR, inventoryR, notifR, websiteR] = await Promise.all([
+    wants.orders
+      ? apiTry<{ data: unknown[] }>(`${bp}/orders?status=pending`, token)
+      : null,
+    wants.bookings
+      ? apiTry<{ data: unknown[] }>(`${bp}/bookings?status=pending`, token)
+      : null,
+    wants.leads
+      ? apiTry<{ data: unknown[] }>(`${bp}/leads?status=new`, token)
+      : null,
+    wants.inventory
+      ? apiTry<{ data: Array<{ stock_status: string }> }>(`${bp}/inventory`, token)
+      : null,
+    apiTry<{ data: { unread_count: number } }>(`${bp}/notifications/unread-count`, token),
+    apiTry<{ data: { website: { status: string }; draft: { pages: unknown[] } } }>(
+      `/v1/b/${params.businessId}/website`,
       token
-    )
-    const count = res.ok ? (res.data.data || []).length : 0
+    ),
+  ])
+
+  if (wants.orders) {
+    const count = ordersR?.ok ? (ordersR.data.data || []).length : 0
     pendingWork += count
     cards.push({
       key: 'orders',
@@ -140,12 +171,8 @@ export default async function WorkspaceHomePage({
     })
   }
 
-  if (active('bookings') && can('bookings.read')) {
-    const res = await apiTry<{ data: unknown[] }>(
-      `/v1/platform/businesses/${params.businessId}/bookings?status=pending`,
-      token
-    )
-    const count = res.ok ? (res.data.data || []).length : 0
+  if (wants.bookings) {
+    const count = bookingsR?.ok ? (bookingsR.data.data || []).length : 0
     pendingWork += count
     cards.push({
       key: 'bookings',
@@ -157,12 +184,8 @@ export default async function WorkspaceHomePage({
     })
   }
 
-  if (active('leads') && can('leads.read')) {
-    const res = await apiTry<{ data: unknown[]; meta: { pipeline?: Record<string, number> } }>(
-      `/v1/platform/businesses/${params.businessId}/leads?status=new`,
-      token
-    )
-    const count = res.ok ? (res.data.data || []).length : 0
+  if (wants.leads) {
+    const count = leadsR?.ok ? (leadsR.data.data || []).length : 0
     pendingWork += count
     cards.push({
       key: 'leads',
@@ -174,13 +197,9 @@ export default async function WorkspaceHomePage({
     })
   }
 
-  if (active('inventory') && can('inventory.read')) {
-    const res = await apiTry<{ data: Array<{ stock_status: string }> }>(
-      `/v1/platform/businesses/${params.businessId}/inventory`,
-      token
-    )
-    const low = res.ok
-      ? (res.data.data || []).filter((row) => row.stock_status !== 'in_stock').length
+  if (wants.inventory) {
+    const low = inventoryR?.ok
+      ? (inventoryR.data.data || []).filter((row) => row.stock_status !== 'in_stock').length
       : 0
     pendingWork += low
     cards.push({
@@ -194,11 +213,7 @@ export default async function WorkspaceHomePage({
   }
 
   // Notifications are Platform Core: no module gate, membership is enough.
-  const notifRes = await apiTry<{ data: { unread_count: number } }>(
-    `/v1/platform/businesses/${params.businessId}/notifications/unread-count`,
-    token
-  )
-  const unread = notifRes.ok ? notifRes.data.data.unread_count : 0
+  const unread = notifR.ok ? notifR.data.data.unread_count : 0
   if (unread > 0) {
     cards.push({
       key: 'notifications',
@@ -211,10 +226,7 @@ export default async function WorkspaceHomePage({
   }
 
   // Website / public presence health.
-  const websiteRes = await apiTry<{
-    data: { website: { status: string }; draft: { pages: unknown[] } }
-  }>(`/v1/b/${params.businessId}/website`, token)
-  const websiteStatus = websiteRes.ok ? websiteRes.data.data.website.status : null
+  const websiteStatus = websiteR.ok ? websiteR.data.data.website.status : null
   const websiteUnpublished = websiteStatus !== null && websiteStatus !== 'published'
 
   const activeModuleCount = OPERATIONAL_MODULES.filter(active).length

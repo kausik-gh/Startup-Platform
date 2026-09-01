@@ -6,14 +6,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.context import EntitlementSet
 from platform_core.entitlements.resolver import BusinessEntitlementResolver
-from platform_core.models import BusinessModuleState
+from platform_core.models import Business, BusinessModuleState
 from platform_core.services.audit import AuditService
 
 
 class EntitlementService:
     @staticmethod
-    async def get_effective(session: AsyncSession, business_id: uuid.UUID) -> EntitlementSet:
-        resolved = await BusinessEntitlementResolver.resolve(session, business_id)
+    async def get_effective(
+        session: AsyncSession,
+        business_id: uuid.UUID,
+        *,
+        business: Business | None = None,
+        module_states: dict[str, BusinessModuleState] | None = None,
+    ) -> EntitlementSet:
+        resolved = await BusinessEntitlementResolver.resolve(
+            session, business_id, business=business, module_states=module_states
+        )
         return BusinessEntitlementResolver.to_entitlement_set(resolved)
 
 

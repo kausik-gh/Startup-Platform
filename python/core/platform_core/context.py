@@ -59,6 +59,14 @@ class RequestContext(BaseModel):
     is_super_admin: bool = False
     correlation_id: str
 
+    # Perf: the ORM Business / BusinessMembership rows that resolve_request_context
+    # already loaded for a path-based business route. resolve_business_actor /
+    # resolve_business_member reuse these instead of re-SELECTing the same rows
+    # (and re-resolving permissions) that the gate chain just produced. Excluded
+    # from any serialization — RequestContext is never dumped, but be explicit.
+    orm_business: Any = Field(default=None, exclude=True, repr=False)
+    orm_membership: Any = Field(default=None, exclude=True, repr=False)
+
     model_config = {"arbitrary_types_allowed": True}
 
     def has_permission(self, permission: str) -> bool:

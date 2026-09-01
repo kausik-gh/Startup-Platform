@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.authorization.models import (
@@ -52,25 +52,55 @@ class EffectivePermissionResolver:
     async def _load_permission_data(
         session: AsyncSession, membership_id: uuid.UUID
     ) -> MembershipPermissionData:
-        grants_result = await session.execute(
-            select(MembershipPermissionGrant.permission).where(
-                MembershipPermissionGrant.membership_id == membership_id
+        # One round-trip instead of three: grants, denials and applied templates
+        # keyed by the same membership_id, tagged so the caller can split them.
+        rows = (
+            await session.execute(
+                select(
+                    literal("g").label("kind"),
+                    MembershipPermissionGrant.permission.label("value"),
+                ).where(MembershipPermissionGrant.membership_id == membership_id)
+                .union_all(
+                    select(
+                        literal("d").label("kind"),
+                        MembershipPermissionDenial.permission.label("value"),
+                    ).where(MembershipPermissionDenial.membership_id == membership_id),
+                    select(
+                        literal("t").label("kind"),
+                        MembershipAppliedTemplate.template_id.label("value"),
+                    ).where(MembershipAppliedTemplate.membership_id == membership_id),
+                )
             )
-        )
-        denials_result = await session.execute(
-            select(MembershipPermissionDenial.permission).where(
-                MembershipPermissionDenial.membership_id == membership_id
-            )
-        )
-        templates_result = await session.execute(
-            select(MembershipAppliedTemplate.template_id).where(
-                MembershipAppliedTemplate.membership_id == membership_id
-            )
-        )
+        ).all()
         return MembershipPermissionData(
-            grants=tuple(row[0] for row in grants_result.all()),
-            denials=tuple(row[0] for row in denials_result.all()),
-            template_ids=tuple(row[0] for row in templates_result.all()),
+            grants=tuple(r.value for r in rows if r.kind == "g"),
+            denials=tuple(r.value for r in rows if r.kind == "d"),
+            template_ids=tuple(r.value for r in rows if r.kind == "t"),
+        )
+
+    @staticmethod
+    async def resolve_with_parts(
+        session: AsyncSession,
+        *,
+        business: Business,
+        membership: BusinessMembership,
+    ) -> ResolvedPermissions:
+        """`resolve()` when the Business row and active membership are already
+        in hand — skips two redundant SELECTs. A primary owner gets the full
+        permission set regardless of grants/denials/templates
+        (`resolve_from_parts`), so their permission-data load is skipped too."""
+        if membership.role == ROLE_PRIMARY_OWNER:
+            permission_data = MembershipPermissionData(
+                grants=(), denials=(), template_ids=()
+            )
+        else:
+            permission_data = await EffectivePermissionResolver._load_permission_data(
+                session, membership.id
+            )
+        return EffectivePermissionResolver.resolve_from_parts(
+            business=business,
+            membership=membership,
+            permission_data=permission_data,
         )
 
     @staticmethod

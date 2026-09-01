@@ -240,15 +240,26 @@ class BusinessEntitlementResolver:
         )
 
     @staticmethod
-    async def resolve(session: AsyncSession, business_id: uuid.UUID) -> ResolvedEntitlement:
+    async def resolve(
+        session: AsyncSession,
+        business_id: uuid.UUID,
+        *,
+        business: Business | None = None,
+        module_states: dict[str, BusinessModuleState] | None = None,
+    ) -> ResolvedEntitlement:
         # Lazy import: BusinessService → entitlement → this module.
         from platform_core.services.business import BusinessService
 
-        business = await BusinessService.get_by_id(session, business_id)
         if business is None:
-            raise ResourceNotFound("Business")
+            business = await BusinessService.get_by_id(session, business_id)
+            if business is None:
+                raise ResourceNotFound("Business")
         db_grants = await BusinessEntitlementResolver._load_db_grants(session, business_id)
-        activation_rows = await BusinessEntitlementResolver._load_module_states(session, business_id)
+        activation_rows = (
+            module_states
+            if module_states is not None
+            else await BusinessEntitlementResolver._load_module_states(session, business_id)
+        )
         return BusinessEntitlementResolver.resolve_from_parts(
             business=business,
             db_grants=db_grants,

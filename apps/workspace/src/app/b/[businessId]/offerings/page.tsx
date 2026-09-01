@@ -32,10 +32,16 @@ export default async function OfferingsPage({ params }: { params: { businessId: 
   const token = await getAccessToken()
   if (!token) redirect('/login')
 
-  const res = await apiTry<{ data: Offering[] }>(
-    `/v1/platform/businesses/${params.businessId}/products`,
-    token
-  )
+  const [res, catRes] = await Promise.all([
+    apiTry<{ data: Offering[] }>(
+      `/v1/platform/businesses/${params.businessId}/products`,
+      token
+    ),
+    apiTry<{ data: Category[] }>(
+      `/v1/platform/businesses/${params.businessId}/product-categories`,
+      token
+    ),
+  ])
   if (!res.ok) {
     return (
       <div>
@@ -49,11 +55,6 @@ export default async function OfferingsPage({ params }: { params: { businessId: 
     )
   }
   const offerings = res.data.data || []
-
-  const catRes = await apiTry<{ data: Category[] }>(
-    `/v1/platform/businesses/${params.businessId}/product-categories`,
-    token
-  )
   const categories = catRes.ok ? catRes.data.data || [] : []
 
   return (

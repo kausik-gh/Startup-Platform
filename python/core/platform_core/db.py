@@ -50,7 +50,17 @@ def create_worker_session_factory(
     engine = create_async_engine(
         db_url,
         echo=False,
-        pool_pre_ping=True,
+        # Perf (measured, ap-northeast-1 pooler from ap-south-1): pool_pre_ping
+        # emits a SELECT 1 on every checkout that, on this asyncpg + Supavisor
+        # session-pooler combination, costs ~400-500ms — it roughly *doubled*
+        # every query. Idle pooled connections survive here for minutes, so the
+        # ping buys little; pool_recycle is the safety net for a connection the
+        # pooler drops out from under us (SQLAlchemy transparently reconnects on
+        # the next use). pool_size default 5 + overflow 10 is plenty for a
+        # single-instance API.
+        pool_pre_ping=False,
+        pool_recycle=1800,
+        connect_args={"timeout": 10},
     )
 
     factory = async_sessionmaker(

@@ -68,6 +68,28 @@ async def resolve_business_actor(
     from platform_core.authorization.resolver import AuthorizationService
     from platform_core.context_resolver import bind_session_context
 
+    # Perf: `resolve_request_context` (via get_request_context) already ran the
+    # gate chain for a path-based business route — it loaded and verified the
+    # Business + active membership from `request.path_params["business_id"]`,
+    # bound the RLS scope, and resolved `ctx.effective_permissions`. When the
+    # path business_id matches that, reuse it all instead of re-issuing ~8
+    # queries (business, membership, business, membership, 3× permission-data).
+    if (
+        ctx.business_id == business_id
+        and ctx.orm_business is not None
+        and ctx.orm_membership is not None
+    ):
+        business = ctx.orm_business
+        membership = ctx.orm_membership
+        if module_id is not None:
+            assert_entitled(ctx, module_id)
+            assert_module_operational(ctx, module_id)
+        if permission not in ctx.effective_permissions:
+            raise PermissionDenied(permission)
+        return BusinessActorContext(
+            request=ctx, business=business, actor_membership=membership
+        )
+
     business = await BusinessService.get_by_id(session, business_id)
     if not business:
         raise ResourceNotFound("Business")
@@ -132,6 +154,17 @@ async def resolve_business_member(
     Business data. Anything reading another identity's data keeps gate [8].
     """
     from platform_core.context_resolver import bind_session_context
+
+    # Perf: reuse the gate-chain result from get_request_context when the path
+    # business_id matches (see resolve_business_actor).
+    if (
+        ctx.business_id == business_id
+        and ctx.orm_business is not None
+        and ctx.orm_membership is not None
+    ):
+        return BusinessActorContext(
+            request=ctx, business=ctx.orm_business, actor_membership=ctx.orm_membership
+        )
 
     business = await BusinessService.get_by_id(session, business_id)
     if not business:

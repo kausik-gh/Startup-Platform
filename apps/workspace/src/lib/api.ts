@@ -1,5 +1,19 @@
 const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
+/**
+ * Header set that tells the API to resolve the request in a specific Business
+ * context. Only needed for endpoints that are not already
+ * `/v1/b/{businessId}/...` or `/v1/platform/businesses/{businessId}/...` (which
+ * carry the id in the path) — chiefly `/v1/me/context`, so a page can get the
+ * viewer's permissions and module states scoped to the Business it is showing.
+ * The API still verifies active membership before trusting the header.
+ */
+export function businessHeaders(businessId?: string): Record<string, string> {
+  return businessId
+    ? { 'X-Operating-Context': 'business', 'X-Business-Id': businessId }
+    : {}
+}
+
 export async function apiGet<T>(path: string, token: string): Promise<T> {
   const res = await fetch(`${apiUrl}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -57,9 +71,13 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: ApiError 
  * is not entitled to the module. `apiGet` would throw and blank the page;
  * this lets the page render the real reason.
  */
-export async function apiTry<T>(path: string, token: string): Promise<ApiResult<T>> {
+export async function apiTry<T>(
+  path: string,
+  token: string,
+  extraHeaders?: Record<string, string>
+): Promise<ApiResult<T>> {
   const res = await fetch(`${apiUrl}${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}`, ...(extraHeaders ?? {}) },
     cache: 'no-store',
   })
   if (res.ok) {
