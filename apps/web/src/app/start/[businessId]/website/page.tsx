@@ -53,10 +53,17 @@ export default async function WebsiteStepPage({
   const token = await getAccessToken()
   if (!token) redirect(`/login?destination=/start/${params.businessId}/website`)
 
-  const [siteRes, bizRes] = await Promise.all([
+  const [siteRes, bizRes, genRes] = await Promise.all([
     apiTry<{ data: WebsiteAggregate }>(`/v1/b/${params.businessId}/website`, token),
     apiTry<{ data: Business[] }>('/v1/platform/businesses', token),
+    apiTry<{ data: { status: string; generated_by?: string | null } | null }>(
+      `/v1/b/${params.businessId}/website/generation`,
+      token
+    ),
   ])
+
+  const genStatus = genRes.ok ? genRes.data.data?.status : undefined
+  const regenerating = genStatus === 'pending' || genStatus === 'running'
 
   if (!siteRes.ok) {
     return (
@@ -81,17 +88,18 @@ export default async function WebsiteStepPage({
     ? (bizRes.data.data || []).find((b) => b.id === params.businessId)
     : undefined
 
-  // Still building: no draft pages yet. Refresh on a timer rather than
-  // pretending with an indefinite spinner.
-  if (pages.length === 0) {
+  // Still building: no draft pages yet, or a questionnaire-driven regeneration
+  // is in flight. Refresh on a timer rather than an indefinite spinner.
+  if (pages.length === 0 || regenerating) {
     return (
       <OnboardingShell>
         <meta httpEquiv="refresh" content="3" />
         <Steps current={2} />
         <h1 style={{ fontSize: '2rem', margin: '0 0 0.6rem' }}>Building your website…</h1>
         <p style={{ color: '#3c4855', lineHeight: 1.65, maxWidth: '34rem' }}>
-          We&apos;re generating your pages now. This screen refreshes every few seconds and
-          will show your site as soon as it&apos;s ready.
+          {regenerating
+            ? "We're writing your site from your answers now. This screen refreshes on its own."
+            : "We're generating your pages now. This screen refreshes every few seconds and will show your site as soon as it's ready."}
         </p>
         <p
           style={{

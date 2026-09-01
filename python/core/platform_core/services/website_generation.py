@@ -22,6 +22,7 @@ from platform_core.services.website import WebsiteService
 from platform_core.validation.website import validate_generation_payload
 from platform_core.website.ai_provider import get_ai_provider
 from platform_core.website.fallback_generator import build_deterministic_draft
+from platform_core.website.questionnaire import build_intake_brief, validate_intake
 from platform_core.website.section_registry import WEBSITE_GENERATION_SCHEMA
 
 
@@ -34,12 +35,15 @@ class WebsiteGenerationService:
         actor_id: uuid.UUID,
         correlation_id: str,
         auto: bool = False,
+        intake: dict[str, Any] | None = None,
     ) -> WebsiteGenerationJob:
         business = await BusinessService.get_by_id(session, business_id)
         assert_business_mutable(business.state, action="generate website")
         await WebsiteService.provision_for_business(
             session, business_id=business_id, actor_id=actor_id
         )
+
+        cleaned_intake = validate_intake(business.business_type, intake) if intake else {}
 
         running = await session.execute(
             select(WebsiteGenerationJob).where(
@@ -49,16 +53,24 @@ class WebsiteGenerationService:
         )
         existing = running.scalars().first()
         if existing is not None:
-            raise ConflictError(
-                "Website generation already in progress",
-                details={"job_id": str(existing.id), "status": existing.status},
-            )
+            # A human-triggered generation (explicit questionnaire answers)
+            # supersedes an auto-enqueued job that the worker has not yet
+            # claimed — the owner's answers must win over the bootstrap draft.
+            if cleaned_intake and existing.status == "pending":
+                existing.status = "superseded"
+                await session.flush()
+            else:
+                raise ConflictError(
+                    "Website generation already in progress",
+                    details={"job_id": str(existing.id), "status": existing.status},
+                )
 
         job = WebsiteGenerationJob(
             business_id=business_id,
             status="pending",
             prompt_version="v1",
             triggered_by=actor_id,
+            intake=cleaned_intake or None,
         )
         session.add(job)
         await session.flush()
@@ -79,6 +91,18 @@ class WebsiteGenerationService:
         return job
 
     @staticmethod
+    async def latest_job(
+        session: AsyncSession, *, business_id: uuid.UUID
+    ) -> WebsiteGenerationJob | None:
+        result = await session.execute(
+            select(WebsiteGenerationJob)
+            .where(WebsiteGenerationJob.business_id == business_id)
+            .order_by(WebsiteGenerationJob.created_at.desc())
+            .limit(1)
+        )
+        return result.scalars().first()
+
+    @staticmethod
     async def _load_context(
         session: AsyncSession, business_id: uuid.UUID
     ) -> dict[str, Any]:
@@ -95,19 +119,27 @@ class WebsiteGenerationService:
         }
 
     @staticmethod
-    async def _try_ai(context: dict[str, Any]) -> dict[str, Any]:
+    async def _try_ai(context: dict[str, Any], intake: dict[str, Any] | None = None) -> dict[str, Any]:
         from platform_core.website.ai_provider import UnavailableAIProvider
 
         provider = get_ai_provider()
-        # Unconfigured provider (FL-DEC-015) fails immediately — no retry delay.
+        # Unconfigured provider (no GEMINI_API_KEY) fails immediately — no retry delay.
         if isinstance(provider, UnavailableAIProvider):
             raise RuntimeError(
-                "AI provider not configured (FL-DEC-015 unresolved); use deterministic fallback"
+                "AI provider not configured (no GEMINI_API_KEY); use deterministic fallback"
             )
         prompt = (
             f"Generate a structured multi-page business website draft for "
-            f"{context['display_name']} ({context.get('business_type') or 'business'})."
+            f"{context['display_name']} ({context.get('business_type') or 'business'}). "
+            "Write real, specific copy in the business's voice. Use only the "
+            "section types named in the schema. Do not invent navigation, cart, "
+            "checkout, or booking behaviour — only content."
         )
+        if context.get("tagline"):
+            prompt += f" Tagline: {context['tagline']}."
+        if context.get("description"):
+            prompt += f" About: {context['description']}."
+        prompt += build_intake_brief(context, intake)
         last_error: Exception | None = None
         for attempt in range(3):
             try:
@@ -146,11 +178,12 @@ class WebsiteGenerationService:
 
         website = await WebsiteResolver.resolve_website(session, business_id=job.business_id)
         context = await WebsiteGenerationService._load_context(session, job.business_id)
+        intake = job.intake if isinstance(job.intake, dict) else None
         generated_by = "ai_generation"
         fallback_reason: str | None = None
         try:
-            payload = await WebsiteGenerationService._try_ai(context)
-            job.ai_provider = "configured"
+            payload = await WebsiteGenerationService._try_ai(context, intake)
+            job.ai_provider = "gemini"
             job.model_name = "structured"
         except Exception as exc:  # noqa: BLE001
             payload = build_deterministic_draft(
@@ -249,6 +282,7 @@ class WebsiteGenerationService:
             "attempt_count": job.attempt_count,
             "error_detail": job.error_detail,
             "fallback_reason": job.fallback_reason,
+            "intake": job.intake if isinstance(job.intake, dict) else None,
             "result_version_id": str(job.result_version_id) if job.result_version_id else None,
             "started_at": job.started_at.isoformat() if job.started_at else None,
             "completed_at": job.completed_at.isoformat() if job.completed_at else None,

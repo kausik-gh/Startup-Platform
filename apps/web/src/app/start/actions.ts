@@ -56,5 +56,5 @@ export async function createBusinessAction(
     await apiPatch(`/v1/platform/businesses/${businessId}/profile`, token, { tagline })
   }
 
-  redirect(`/start/${businessId}/website`)
+  redirect(`/start/${businessId}/website/questions`)
 }

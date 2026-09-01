@@ -13,9 +13,9 @@ import pytest
 from fastapi.testclient import TestClient
 from platform_api.main import app
 from platform_core.db import get_database_url
-from platform_core.models import PlatformOutboxEvent, WebsiteGenerationJob
+from platform_core.models import PlatformOutboxEvent
+from platform_core.models import WebsiteGenerationJob as WGJ
 from platform_testing.db_helpers import ensure_auth_user
-from platform_worker.job_runner import poll_and_execute_jobs
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -76,45 +76,57 @@ def _create_business(client: TestClient, headers: dict[str, str]) -> str:
 
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 def test_generation_fallback_always_produces_draft(owner: tuple[dict[str, str], uuid.UUID]) -> None:
+    """With no AI provider configured, `execute_job` must still land a valid
+    draft and emit the events. Driven directly (own job row, no async job) so a
+    locally-running worker cannot race us for it."""
+    import platform_core.services.website_generation as gen_mod
+
     headers, _ = owner
     client = TestClient(app)
     business_id = _create_business(client, headers)
+    biz_uuid = uuid.UUID(business_id)
 
-    # Business creation already enqueued a job; drain worker lane.
-    async def _run_jobs() -> str:
+    async def _run() -> dict[str, Any]:
         url = get_database_url()
         assert url
         if url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
         engine = create_async_engine(url, echo=False, poolclass=NullPool)
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-        status = "failed"
         async with factory() as session:
-            for _ in range(5):
-                await poll_and_execute_jobs(session, "test-website-worker")
-            result = await session.execute(
-                select(WebsiteGenerationJob)
-                .where(WebsiteGenerationJob.business_id == uuid.UUID(business_id))
-                .order_by(WebsiteGenerationJob.created_at.desc())
+            triggered_by = (
+                await session.execute(
+                    select(WGJ.triggered_by).where(WGJ.business_id == biz_uuid).limit(1)
+                )
+            ).scalar_one()
+            job = WGJ(
+                business_id=biz_uuid,
+                status="pending",
+                prompt_version="v1",
+                triggered_by=triggered_by,
             )
-            job = result.scalars().first()
-            assert job is not None
-            assert job.status in {"completed", "fallback_used"}
-            assert job.result_version_id is not None
+            session.add(job)
+            await session.flush()
+            await session.commit()
+            res = await gen_mod.WebsiteGenerationService.execute_job(
+                session, generation_job_id=job.id, correlation_id=str(uuid.uuid4())
+            )
+            await session.commit()
             outbox = await session.execute(
                 select(PlatformOutboxEvent).where(
-                    PlatformOutboxEvent.business_id == uuid.UUID(business_id),
+                    PlatformOutboxEvent.business_id == biz_uuid,
                     PlatformOutboxEvent.event_type == "website.draft_generated",
                 )
             )
             assert outbox.scalars().first() is not None
-            status = job.status
         await engine.dispose()
-        return status
+        return res
 
-    status = asyncio.run(_run_jobs())
-    # Default provider unavailable → deterministic fallback
-    assert status == "fallback_used"
+    res = asyncio.run(_run())
+    # No GEMINI_API_KEY in the suite (conftest) → deterministic fallback.
+    assert res["status"] == "fallback_used"
+    assert res["generated_by"] == "deterministic_fallback"
+    assert res["version_id"]
 
     site = client.get(f"/v1/b/{business_id}/website", headers=headers)
     assert site.status_code == 200, site.text
@@ -153,3 +165,117 @@ def test_fallback_unit_schema_valid() -> None:
     )
     validated = validate_generation_payload(payload)
     assert validated["pages"][0]["slug"] == "home"
+
+
+class _StubProvider:
+    """Deterministic stand-in for GeminiProvider — records the prompt it saw."""
+
+    last_prompt: str = ""
+
+    async def generate_structured(self, prompt, schema, model_config, timeout_seconds):  # type: ignore[no-untyped-def]
+        _StubProvider.last_prompt = prompt
+        return {
+            "pages": [
+                {
+                    "slug": "home",
+                    "title": "Home",
+                    "page_type": "home",
+                    "sections": [
+                        {
+                            "section_type_id": "hero",
+                            "layout_variant": "centered",
+                            "content": {"headline": "Stubbed headline", "subheadline": "from AI"},
+                            "is_visible": True,
+                        }
+                    ],
+                }
+            ],
+            "navigation": [{"label": "Home", "path": "/"}],
+            "theme_hints": {"primary_color": "#4B6B5A"},
+        }
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_generation_uses_ai_provider_and_intake(
+    owner: tuple[dict[str, str], uuid.UUID], monkeypatch: Any
+) -> None:
+    """Drives `execute_job` directly with a stub provider and a job row we
+    create ourselves — no `platform_async_jobs` row, so a locally-running
+    worker cannot race us for it."""
+    import platform_core.services.website_generation as gen_mod
+
+    monkeypatch.setattr(gen_mod, "get_ai_provider", lambda: _StubProvider())
+
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)
+    biz_uuid = uuid.UUID(business_id)
+
+    intake = {
+        "lead_with": "offerings",
+        "palette": "sage",
+        "words_prefer": "hand-rolled, small-batch",
+        "menu_items": [{"name": "Ragi dosa", "description": "crisp, stone-ground"}],
+    }
+
+    async def _run() -> dict[str, Any]:
+        url = get_database_url()
+        assert url
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        engine = create_async_engine(url, echo=False, poolclass=NullPool)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            triggered_by = (
+                await session.execute(
+                    select(WGJ.triggered_by).where(WGJ.business_id == biz_uuid).limit(1)
+                )
+            ).scalar_one()
+            job = WGJ(
+                business_id=biz_uuid,
+                status="pending",
+                prompt_version="v1",
+                triggered_by=triggered_by,
+                intake=intake,
+            )
+            session.add(job)
+            await session.flush()
+            await session.commit()
+            res = await gen_mod.WebsiteGenerationService.execute_job(
+                session, generation_job_id=job.id, correlation_id=str(uuid.uuid4())
+            )
+            await session.commit()
+        await engine.dispose()
+        return res
+
+    res = asyncio.run(_run())
+    assert res["generated_by"] == "ai_generation", res
+    assert res["status"] == "completed"
+    # the one generate_structured call saw the assembled intake brief
+    assert "Ragi dosa" in _StubProvider.last_prompt
+    assert "hand-rolled" in _StubProvider.last_prompt
+    assert "offerings" in _StubProvider.last_prompt
+
+
+@pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
+def test_questionnaire_endpoint_is_business_type_aware(
+    owner: tuple[dict[str, str], uuid.UUID],
+) -> None:
+    headers, _ = owner
+    client = TestClient(app)
+    business_id = _create_business(client, headers)  # restaurant
+
+    resp = client.get(f"/v1/b/{business_id}/website/questionnaire", headers=headers)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["business_type"] == "restaurant"
+    section_ids = {s["id"] for s in data["sections"]}
+    assert "universal" in section_ids
+    assert "type_specific" in section_ids
+    ts = next(s for s in data["sections"] if s["id"] == "type_specific")
+    assert ts["questions"][0]["id"] == "menu_items"
+    # every universal question is optional and carries an example
+    uni = next(s for s in data["sections"] if s["id"] == "universal")
+    for q in uni["questions"]:
+        assert q["optional"] is True
+        assert q.get("example")

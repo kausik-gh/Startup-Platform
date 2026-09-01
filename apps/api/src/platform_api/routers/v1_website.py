@@ -13,15 +13,19 @@ from platform_api.db import get_db_session
 from platform_api.dependencies import BusinessActorContext, require_business_actor
 from platform_core.permissions import WEBSITE_EDIT, WEBSITE_PUBLISH, WEBSITE_READ
 from platform_core.resolvers.website_resolver import WebsiteResolver
+from platform_core.services.business import BusinessService
 from platform_core.services.website import PageService, SectionService, WebsiteService, WebsiteVersionService
 from platform_core.services.website_generation import WebsiteGenerationService
 from platform_core.services.website_publish import WebsitePublishService
+from platform_core.website.questionnaire import get_questionnaire
 
 router = APIRouter(prefix="/v1/b", tags=["website"])
 
 
 class GenerateWebsiteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    intake: dict[str, Any] | None = None
 
 
 class PatchPageRequest(BaseModel):
@@ -50,6 +54,32 @@ class PatchThemeNavRequest(BaseModel):
     theme: dict[str, Any] | None = None
 
 
+@router.get("/{business_id}/website/generation")
+async def latest_generation(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    job = await WebsiteGenerationService.latest_job(session, business_id=business_id)
+    return {
+        "data": WebsiteGenerationService.serialize_job(job) if job is not None else None,
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
+@router.get("/{business_id}/website/questionnaire")
+async def website_questionnaire(
+    business_id: UUID,
+    actor: BusinessActorContext = Depends(require_business_actor(WEBSITE_READ)),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict[str, Any]:
+    business = await BusinessService.get_by_id(session, business_id)
+    return {
+        "data": get_questionnaire(business.business_type),
+        "meta": {"correlation_id": actor.request.correlation_id},
+    }
+
+
 @router.post("/{business_id}/website/generate")
 async def generate_website(
     business_id: UUID,
@@ -63,6 +93,7 @@ async def generate_website(
         actor_id=actor.request.identity_id,
         correlation_id=actor.request.correlation_id,
         auto=False,
+        intake=body.intake if body else None,
     )
     await session.commit()
     return {
