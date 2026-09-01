@@ -36,6 +36,21 @@ def test_credential_keys_are_redacted() -> None:
     assert out["safe"] == "keep-me"
 
 
+def test_gemini_api_key_is_redacted() -> None:
+    out = _run(
+        {
+            "event": "website.generate",
+            "GEMINI_API_KEY": "AIzaSyEXAMPLE",
+            "gemini_api_key": "AIzaSyEXAMPLE",
+            "model_config": {"gemini": "AIzaSyEXAMPLE", "purpose": "website.generate"},
+        }
+    )
+    assert out["GEMINI_API_KEY"] == "***redacted***"
+    assert out["gemini_api_key"] == "***redacted***"
+    assert out["model_config"]["gemini"] == "***redacted***"
+    assert out["model_config"]["purpose"] == "website.generate"
+
+
 def test_supabase_service_role_key_is_redacted() -> None:
     out = _run(
         {
