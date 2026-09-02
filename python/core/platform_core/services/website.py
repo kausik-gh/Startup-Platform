@@ -93,6 +93,14 @@ class WebsiteService:
         for page in pages:
             sections = await WebsiteResolver.list_sections(session, page_id=page.id)
             page_payloads.append(WebsiteResolver.serialize_page(page, sections))
+        # Asset ids -> public URLs, alongside `content` (never inside it), so
+        # the Workspace preview can show uploaded images.
+        from platform_core.services.media import MediaService
+
+        for payload in page_payloads:
+            await MediaService.attach_section_asset_urls(
+                session, payload.get("sections") or [], business_id=business_id
+            )
         published = None
         if website.published_version_id:
             result = await session.execute(

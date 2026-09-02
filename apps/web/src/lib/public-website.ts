@@ -13,6 +13,9 @@ export type PublicWebsitePayload = {
       section_type_id: string
       layout_variant?: string | null
       content: Record<string, unknown>
+      /** Asset ids in `content` resolved to public URLs. Never inside `content`
+       *  itself — section content is schema-validated on write. */
+      assets?: Record<string, { url: string; alt_text?: string | null }>
       is_visible: boolean
     }[]
   }

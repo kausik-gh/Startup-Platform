@@ -259,6 +259,13 @@ class WebsitePublishService:
             raise ResourceNotFound("Page")
         sections = await WebsiteResolver.list_sections(session, page_id=page.id)
         visible_sections = [s for s in sections if s.is_visible or is_preview]
+        serialized_page = WebsiteResolver.serialize_page(page, visible_sections)
+        # Asset ids -> public URLs, alongside `content` (never inside it).
+        from platform_core.services.media import MediaService
+
+        await MediaService.attach_section_asset_urls(
+            session, serialized_page.get("sections") or [], business_id=business.id
+        )
         return {
             "business": {
                 "id": str(business.id),
@@ -268,7 +275,7 @@ class WebsitePublishService:
             },
             "website": WebsiteResolver.serialize_website(website),
             "version": WebsiteResolver.serialize_version(version),
-            "page": WebsiteResolver.serialize_page(page, visible_sections),
+            "page": serialized_page,
             "navigation": version.navigation,
             "theme": version.theme,
             "is_preview": is_preview,

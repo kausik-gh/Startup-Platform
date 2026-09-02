@@ -14,6 +14,7 @@
 | 1.0 | July 2026 | Initial canonical implementation blueprint. Converts approved product model and architecture into engineering execution plan. Resolves FL-DEC-010, FL-DEC-011, FL-DEC-012, FL-DEC-013, FL-DEC-014 as engineering decisions. |
 | 1.1 | July 2026 | Controlled correction pass: replaces the Node-oriented pg-boss mismatch with a Python-native PostgreSQL worker built on the transactional outbox; standardizes IDs on UUIDv4; updates Next.js authentication to the current `@supabase/ssr` cookie and Proxy pattern; and records the intentional Document 10 backend supersession by FastAPI/Python. No product, module, launch-scope, application-boundary, stage, or vertical-slice change. |
 | 1.2 | September 1, 2026 | Additive amendment pass (Website Generation Overhaul & Workspace Cleanup work order). Records decisions made now, not retroactively: the AI content-authorship boundary (§12.6), the one-shot structured-intake generation model and its questionnaire (§12.7), and prebuilt-template ingestion as design-reference translation only — Option A (§12.8). Corrects two stale identifiers in §12.1–§12.2 to match the implemented `AIModelProvider.generate_structured` contract and the `platform_core/website/ai_provider.py` module path. No schema change; no change to the 13 seeded SectionTypes; no launch-scope change. `FL-DEC-015` (initial provider, budget, fallback policy) remains open — a temporary founder-authorized Gemini key is in place pending its formal closure. |
+| 1.3 | September 1, 2026 | Additive amendment (media & storage implementation). Records how §15 was actually built: one `media` bucket rather than the four in §15.1; the Stage 2 `media_assets` column names retained over §15.2's; signed upload URLs minted with the **caller's JWT**, never a service-role key; upload permission derived from a declared `purpose` mapped onto existing canonical permissions rather than a new `media.*` identifier; and resolved asset URLs returned beside `content`, never inside it. See §15.5. Storage RLS tightened (migration `20260901020000`) — the pre-existing `media` bucket allowed anonymous insert/update. |
 
 
 ---
@@ -1904,6 +1905,34 @@ The API server never handles binary file content.
 ## 15.4 File Type Allowlist
 
 Permitted: `image/jpeg`, `image/png`, `image/webp`, `image/gif` (static only). Max: 10MB per file. Vector/SVG uploads disabled (XSS risk). PDF deferred.
+
+## 15.5 Implementation Amendment
+
+> **Amendment — 2026-09-01 (media & storage build; additive, dated per Document 08 §25.3).**
+> §15.1–§15.4 above stand as the design. These are the points where the built
+> system deliberately differs, recorded rather than quietly diverged.
+
+| §15 says | Built as | Why |
+|---|---|---|
+| Four buckets (`business-public`, `business-private`, `platform-assets`, `user-avatars`) | One public `media` bucket | Only public Business media exists at First Launch. The other three are added when something needs them; splitting early buys nothing and multiplies RLS surface. |
+| `media_assets(identity_id, bucket, storage_path, file_size_bytes, …)` | The Stage 2 table's names kept: `uploader_identity_id`, `storage_key`, `size_bytes`; `bucket`, `width`, `height`, `purpose`, `deleted_at` added | The table already shipped in `20260713100000` with data-free but live DDL. Renaming columns to match prose is churn; the shape is equivalent. |
+| "Server calls Supabase Storage `createSignedUploadUrl()`" | Server calls the Storage REST sign endpoint **with the caller's own JWT** | This project has a standing rule that no service-role client exists anywhere. Storage RLS scopes a signed-in caller to their own `{supabase_user_id}/` prefix; business ownership of an asset is authoritative in `media_assets`, which only the API writes. |
+| (silent on permissions) | Upload declares a `purpose`; each purpose maps to an existing canonical permission — `website`→`website.edit`, `brand`/`profile`→`business.update`, `offering`→`offerings.update` | Doc 12 §8.2 has no `media.*` permission and adding one is a registry change. An unmapped purpose raises rather than falling open. |
+| (silent on read-back) | Resolved public URLs are returned as `section.assets[key] = {url, alt_text}`, **never merged into `section.content`** | `validate_section_content` rejects fields absent from the SectionType schema, so injecting a URL into `content` would break the next PATCH round-trip. |
+
+**Storage RLS (migration `20260901020000`).** The `media` bucket predated this
+work, was created outside version control, and carried `media_insert` /
+`media_update` policies granted to role `public` with only a `bucket_id` check
+— i.e. any anonymous caller could write or overwrite any object, with no size
+or MIME limit. Nothing referenced the bucket and `media_assets` was empty. The
+policies are now: public `SELECT` (published Business media is public by
+design), and `INSERT`/`UPDATE`/`DELETE` for role `authenticated` restricted to
+the caller's own uid prefix. Bucket limits are set to 10MB and the §15.4 image
+allowlist.
+
+**Still open:** image dimensions (`width`/`height`) are stored but never
+populated — no processing pipeline exists. Deriving them needs either a client
+measurement passed on upload or a worker job; neither is built.
 
 ---
 

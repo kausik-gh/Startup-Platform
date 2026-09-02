@@ -7,7 +7,11 @@ import {
   WebsiteQuestionnaire,
   type QuestionnaireSchema,
 } from '@/components/website-questionnaire/WebsiteQuestionnaire'
-import { submitQuestionnaireAction } from './actions'
+import {
+  completeQuestionnaireUpload,
+  requestQuestionnaireUpload,
+  submitQuestionnaireAction,
+} from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,6 +53,8 @@ export default async function WebsiteQuestionsPage({
   }
 
   const submit = submitQuestionnaireAction.bind(null, params.businessId)
+  const uploadStart = requestQuestionnaireUpload.bind(null, params.businessId)
+  const uploadFinish = completeQuestionnaireUpload.bind(null, params.businessId)
 
   return (
     <OnboardingShell>
@@ -68,7 +74,13 @@ export default async function WebsiteQuestionsPage({
         rest from your business details. It all goes into one pass, so your whole site is built at
         once. You can edit every word afterwards.
       </p>
-      <WebsiteQuestionnaire schema={schemaRes.data.data} action={submit} skipHref={resultHref} />
+      <WebsiteQuestionnaire
+        schema={schemaRes.data.data}
+        action={submit}
+        skipHref={resultHref}
+        uploadStart={uploadStart}
+        uploadFinish={uploadFinish}
+      />
     </OnboardingShell>
   )
 }

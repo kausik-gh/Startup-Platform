@@ -156,6 +156,29 @@ class WebsiteGenerationService:
         raise RuntimeError(str(last_error or "AI generation failed"))
 
     @staticmethod
+    def _apply_intake_assets(
+        payload: dict[str, Any], intake: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Place questionnaire-uploaded images into the generated draft.
+
+        Asset ids are never sent to the model — it has nothing useful to do
+        with a UUID. They are stitched in afterwards, onto the first section
+        whose SectionType actually has an image slot.
+        """
+        if not intake:
+            return payload
+        hero_asset = intake.get("hero_image_asset_id")
+        if not hero_asset:
+            return payload
+        for page in payload.get("pages") or []:
+            for section in page.get("sections") or []:
+                if section.get("section_type_id") in {"hero", "about"}:
+                    content = section.setdefault("content", {})
+                    content["image_asset_id"] = str(hero_asset)
+                    return payload
+        return payload
+
+    @staticmethod
     async def execute_job(
         session: AsyncSession,
         *,
@@ -199,6 +222,10 @@ class WebsiteGenerationService:
             job.ai_provider = None
             job.model_name = None
 
+        payload = WebsiteGenerationService._apply_intake_assets(payload, intake)
+        # Re-validate: the stitched asset id has not been through the schema
+        # + content-safety pass that _try_ai / the fallback already applied.
+        payload = validate_generation_payload(payload)
         draft = await WebsiteService.replace_draft_from_generation(
             session,
             business_id=job.business_id,

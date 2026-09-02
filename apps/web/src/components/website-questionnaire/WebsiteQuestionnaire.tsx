@@ -100,14 +100,105 @@ function Chip({
   )
 }
 
+function AssetUpload({
+  onUploaded,
+  uploadStart,
+  uploadFinish,
+}: {
+  onUploaded: (assetId: string) => void
+  uploadStart: (
+    mimeType: string,
+    sizeBytes: number,
+    originalFilename: string
+  ) => Promise<{ ok: true; assetId: string; uploadUrl: string } | { ok: false; error: string }>
+  uploadFinish: (assetId: string) => Promise<{ ok: boolean; error?: string }>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const pick = async (file: File) => {
+    setError(null)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('That image is over 10MB. Try a smaller one.')
+      return
+    }
+    setBusy(true)
+    try {
+      const started = await uploadStart(file.type, file.size, file.name)
+      if (!started.ok) return setError(started.error)
+      // Straight to storage — the file body never passes through our servers.
+      const put = await fetch(started.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!put.ok) return setError(`Upload failed (${put.status}).`)
+      const finished = await uploadFinish(started.assetId)
+      if (!finished.ok) return setError(finished.error || 'Upload could not be confirmed.')
+      onUploaded(started.assetId)
+      setDone(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginTop: '0.6rem' }}>
+      <label
+        style={{
+          display: 'inline-block',
+          padding: '0.45rem 0.85rem',
+          borderRadius: 8,
+          border: `1px dashed ${teal}`,
+          fontFamily: sans,
+          fontSize: '0.85rem',
+          color: teal,
+          cursor: busy ? 'wait' : 'pointer',
+        }}
+      >
+        {busy ? 'Uploading…' : done ? 'Uploaded ✓ — choose another' : 'Choose an image'}
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          disabled={busy}
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (file) void pick(file)
+          }}
+        />
+      </label>
+      {error ? (
+        <div style={{ marginTop: '0.35rem', fontFamily: sans, fontSize: '0.8rem', color: '#8d2f24' }}>
+          {error}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function QuestionView({
   q,
   value,
   set,
+  onAsset,
+  uploadStart,
+  uploadFinish,
 }: {
   q: Question
   value: unknown
   set: (v: unknown) => void
+  onAsset: (assetId: string) => void
+  uploadStart: (
+    mimeType: string,
+    sizeBytes: number,
+    originalFilename: string
+  ) => Promise<{ ok: true; assetId: string; uploadUrl: string } | { ok: false; error: string }>
+  uploadFinish: (assetId: string) => Promise<{ ok: boolean; error?: string }>
 }) {
   const header = (
     <div style={{ display: 'grid', gap: '0.25rem' }}>
@@ -129,6 +220,13 @@ function QuestionView({
             </Chip>
           ))}
         </div>
+        {q.kind === 'asset_choice' && v === 'upload' ? (
+          <AssetUpload
+            onUploaded={onAsset}
+            uploadStart={uploadStart}
+            uploadFinish={uploadFinish}
+          />
+        ) : null}
       </div>
     )
   }
@@ -324,10 +422,18 @@ export function WebsiteQuestionnaire({
   schema,
   action,
   skipHref,
+  uploadStart,
+  uploadFinish,
 }: {
   schema: QuestionnaireSchema
   action: (intakeJson: string) => Promise<void>
   skipHref: string
+  uploadStart: (
+    mimeType: string,
+    sizeBytes: number,
+    originalFilename: string
+  ) => Promise<{ ok: true; assetId: string; uploadUrl: string } | { ok: false; error: string }>
+  uploadFinish: (assetId: string) => Promise<{ ok: boolean; error?: string }>
 }) {
   const [answers, setAnswers] = useState<Answers>({})
   const [submitting, setSubmitting] = useState(false)
@@ -374,7 +480,15 @@ export function WebsiteQuestionnaire({
             ) : null}
           </div>
           {s.questions.map((q) => (
-            <QuestionView key={q.id} q={q} value={answers[q.id]} set={(v) => set(q.id, v)} />
+            <QuestionView
+              key={q.id}
+              q={q}
+              value={answers[q.id]}
+              set={(v) => set(q.id, v)}
+              onAsset={(assetId) => set(`${q.id}_asset_id`, assetId)}
+              uploadStart={uploadStart}
+              uploadFinish={uploadFinish}
+            />
           ))}
         </section>
       ))}

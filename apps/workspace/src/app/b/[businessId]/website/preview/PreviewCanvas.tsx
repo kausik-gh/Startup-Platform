@@ -8,21 +8,26 @@
  * to the existing section content-update endpoint (see ./actions.ts) — no new
  * backend, same validation.
  *
- * Image replace is intentionally NOT wired here: the platform has no media
- * upload endpoint yet (Doc 12 §15 is unbuilt). Image slots show a disabled
- * affordance rather than a broken one. This gap is flagged, not worked around.
+ * Image replace uses the two-step upload (Doc 12 §15.3): the server hands back
+ * a signed URL, the browser PUTs the file straight to Supabase Storage, then
+ * the asset is confirmed and its id written into the section content through
+ * the same content-update endpoint as the text edits.
  */
 
 import React, { useState } from 'react'
-import { saveSectionContent } from './actions'
+import { completeImageUpload, requestImageUpload, saveSectionContent } from './actions'
 
 type Section = {
   id: string
   section_type_id: string
   layout_variant?: string | null
   content: Record<string, unknown>
+  assets?: Record<string, { url: string; alt_text?: string | null }>
   is_visible: boolean
 }
+
+const ACCEPTED_IMAGE_TYPES = 'image/jpeg,image/png,image/webp,image/gif'
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 type Theme = Record<string, unknown>
 
 const FIELDS: Record<string, { key: string; label: string; multiline?: boolean }[]> = {
@@ -147,22 +152,107 @@ function Editable({
   )
 }
 
-function ImageSlot() {
+function ImageSlot({
+  businessId,
+  currentUrl,
+  onUploaded,
+}: {
+  businessId: string
+  currentUrl?: string
+  onUploaded: (assetId: string) => void | Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  // The server-rendered `currentUrl` only refreshes on reload, so hold the
+  // just-uploaded URL locally and prefer it.
+  const [justUploaded, setJustUploaded] = useState<string | null>(null)
+  const shown = justUploaded || currentUrl
+
+  const pick = async (file: File) => {
+    setError(null)
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError('That image is over 10MB. Try a smaller one.')
+      return
+    }
+    setBusy(true)
+    try {
+      const started = await requestImageUpload(businessId, file.type, file.size, file.name)
+      if (!started.ok) {
+        setError(started.error)
+        return
+      }
+      // Straight to Supabase Storage — the file body never touches our servers.
+      const put = await fetch(started.uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      })
+      if (!put.ok) {
+        setError(`Upload failed (${put.status}).`)
+        return
+      }
+      const done = await completeImageUpload(businessId, started.assetId)
+      if (!done.ok) {
+        setError(done.error)
+        return
+      }
+      if (done.url) setJustUploaded(done.url)
+      await onUploaded(started.assetId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
-    <div
-      style={{
-        marginTop: '0.75rem',
-        padding: '0.9rem',
-        border: '1px dashed rgba(0,0,0,0.3)',
-        borderRadius: 6,
-        fontSize: '0.8rem',
-        color: 'rgba(0,0,0,0.55)',
-        fontFamily: 'system-ui, sans-serif',
-        maxWidth: '22rem',
-      }}
-    >
-      Image slot — replacing images from the preview isn&apos;t available yet
-      (media upload is not built). Add images from Brand &amp; Media once that lands.
+    <div style={{ marginTop: '0.75rem', maxWidth: '22rem' }}>
+      {shown ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={shown}
+          alt=""
+          style={{ width: '100%', borderRadius: 6, display: 'block', marginBottom: '0.5rem' }}
+        />
+      ) : null}
+      <label
+        style={{
+          display: 'inline-block',
+          padding: '0.45rem 0.8rem',
+          border: '1px dashed rgba(0,0,0,0.35)',
+          borderRadius: 6,
+          fontSize: '0.8rem',
+          fontFamily: 'system-ui, sans-serif',
+          cursor: busy ? 'wait' : 'pointer',
+          background: 'rgba(255,255,255,0.75)',
+          color: '#33404e',
+        }}
+      >
+        {busy ? 'Uploading…' : shown ? 'Replace image' : 'Add image'}
+        <input
+          type="file"
+          accept={ACCEPTED_IMAGE_TYPES}
+          disabled={busy}
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            e.target.value = ''
+            if (file) void pick(file)
+          }}
+        />
+      </label>
+      {error ? (
+        <div
+          style={{
+            marginTop: '0.4rem',
+            fontSize: '0.78rem',
+            fontFamily: 'system-ui, sans-serif',
+            color: '#c0392b',
+          }}
+        >
+          {error}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -216,7 +306,10 @@ export function PreviewCanvas({
             {page.sections.map((section) => {
               const c = sections[section.id] || {}
               const fields = FIELDS[section.section_type_id] || GENERIC
-              const hasImage = IMAGE_KEYS.some((k) => k in (section.content || {}))
+              const supportsImage =
+                IMAGE_KEYS.some((k) => k in (section.content || {})) ||
+                section.section_type_id === 'hero' ||
+                section.section_type_id === 'about'
               const isHero = section.section_type_id === 'hero'
               const isBand = section.section_type_id === 'cta_band'
               return (
@@ -268,7 +361,13 @@ export function PreviewCanvas({
                         />
                       </div>
                     ))}
-                    {hasImage ? <ImageSlot /> : null}
+                    {supportsImage ? (
+                      <ImageSlot
+                        businessId={businessId}
+                        currentUrl={section.assets?.image_asset_id?.url}
+                        onUploaded={(assetId) => commit(section, 'image_asset_id', assetId)}
+                      />
+                    ) : null}
                   </div>
                 </section>
               )

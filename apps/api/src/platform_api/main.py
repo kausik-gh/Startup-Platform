@@ -10,7 +10,7 @@ from platform_core.logging import configure as configure_logging, get_logger
 from platform_api.errors import platform_error_handler
 from platform_api.observability import RequestLogMiddleware
 from platform_api.rate_limit import RateLimitMiddleware
-from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings, v1_platform_leads, v1_platform_memberships, v1_platform_notifications
+from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings, v1_platform_leads, v1_platform_memberships, v1_platform_notifications, v1_media
 
 # Database lifecycle state
 db_engine = None
@@ -123,6 +123,7 @@ app.include_router(v1_admin.router)
 app.include_router(v1_platform_leads.router)
 app.include_router(v1_platform_memberships.router)
 app.include_router(v1_platform_notifications.router)
+app.include_router(v1_media.router)
 
 app.add_exception_handler(PlatformError, platform_error_handler)
 
