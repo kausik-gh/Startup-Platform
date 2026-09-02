@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { GateNotice, PageHeader } from '@/components/ModuleState'
+import { DetailShell, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { advanceOrderStatus, cancelOrder } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +15,7 @@ export default async function OrderDetailPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const base = `/b/${params.businessId}`
   const res = await apiTry<{
     data: {
       id: string
@@ -30,8 +31,7 @@ export default async function OrderDetailPage({
   if (!res.ok) {
     return (
       <div>
-        <Link href={`/b/${params.businessId}/orders`}>← Orders</Link>
-        <PageHeader title="Order" />
+        <PageHeader title="Order" breadcrumb={<Link href={`${base}/orders`}>← Orders</Link>} />
         <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Orders" />
       </div>
     )
@@ -44,52 +44,91 @@ export default async function OrderDetailPage({
     ready: ['completed'],
   }
   const next = nextByStatus[order.status] || []
+  const cancellable = ['pending', 'accepted', 'preparing', 'ready'].includes(order.status)
+
+  const actions = (
+    <>
+      {next.map((status) => (
+        <form key={status} action={advanceOrderStatus}>
+          <input type="hidden" name="businessId" value={params.businessId} />
+          <input type="hidden" name="orderId" value={params.orderId} />
+          <input type="hidden" name="status" value={status} />
+          {status === 'rejected' ? (
+            <input type="hidden" name="reason" value="Rejected by Business" />
+          ) : null}
+          <button
+            type="submit"
+            className={status === 'rejected' ? 'btn-danger' : undefined}
+            style={{ textTransform: 'capitalize' }}
+          >
+            {status}
+          </button>
+        </form>
+      ))}
+      {cancellable ? (
+        <form action={cancelOrder}>
+          <input type="hidden" name="businessId" value={params.businessId} />
+          <input type="hidden" name="orderId" value={params.orderId} />
+          <input type="hidden" name="reason" value="Cancelled from Workspace" />
+          <button type="submit" className="btn-ghost">
+            Cancel order
+          </button>
+        </form>
+      ) : null}
+    </>
+  )
 
   return (
-    <div>
-      <Link href={`/b/${params.businessId}/orders`}>← Orders</Link>
-      <h1 style={{ fontSize: '2rem', marginTop: '0.75rem' }}>{order.order_number}</h1>
-      <p>
-        Status: <strong>{order.status}</strong> · Payment: {order.payment_method} /{' '}
-        {order.payment_status}
+    <DetailShell
+      breadcrumb={<Link href={`${base}/orders`}>← Orders</Link>}
+      title={order.order_number}
+      status={<StatusPill value={order.status} />}
+      meta={[
+        ['Payment', `${order.payment_method} · ${order.payment_status}`],
+        ['Total', `${order.currency} ${order.total_amount}`],
+      ]}
+      actions={next.length || cancellable ? actions : undefined}
+    >
+      <Section title="Items">
+        <div
+          style={{
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius)',
+            overflow: 'hidden',
+            background: 'var(--color-surface)',
+          }}
+        >
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th data-num>Qty</th>
+                <th data-num>Line total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(order.items || []).map((item, idx) => (
+                <tr key={idx}>
+                  <td>{item.title}</td>
+                  <td data-num>{item.quantity}</td>
+                  <td data-num>
+                    {order.currency} {item.line_total}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {(order.items || []).length === 0 ? (
+            <p style={{ padding: '1rem', color: 'var(--color-muted)', margin: 0 }}>
+              No line items on this order.
+            </p>
+          ) : null}
+        </div>
+      </Section>
+
+      <p style={{ marginTop: '1.5rem', color: 'var(--color-muted)', fontSize: '0.88rem' }}>
+        Refunds: use the Payments module transaction detail when a payment attempt exists.
       </p>
-      <p>
-        Total: {order.currency} {order.total_amount}
-      </p>
-      <section style={{ marginTop: '1.25rem' }}>
-        <h2>Items</h2>
-        <ul>
-          {(order.items || []).map((item, idx) => (
-            <li key={idx}>
-              {item.title} × {item.quantity} — {item.line_total}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section style={{ marginTop: '1.25rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {next.map((status) => (
-          <form key={status} action={advanceOrderStatus}>
-            <input type="hidden" name="businessId" value={params.businessId} />
-            <input type="hidden" name="orderId" value={params.orderId} />
-            <input type="hidden" name="status" value={status} />
-            {status === 'rejected' ? (
-              <input type="hidden" name="reason" value="Rejected by Business" />
-            ) : null}
-            <button type="submit">{status}</button>
-          </form>
-        ))}
-        {['pending', 'accepted', 'preparing', 'ready'].includes(order.status) ? (
-          <form action={cancelOrder}>
-            <input type="hidden" name="businessId" value={params.businessId} />
-            <input type="hidden" name="orderId" value={params.orderId} />
-            <input type="hidden" name="reason" value="Cancelled from Workspace" />
-            <button type="submit">Cancel order</button>
-          </form>
-        ) : null}
-      </section>
-      <p style={{ marginTop: '1.5rem', opacity: 0.75 }}>
-        Refunds: use Payments module transaction detail when a payment attempt exists.
-      </p>
-    </div>
+    </DetailShell>
   )
 }

@@ -1,4 +1,6 @@
 import React from 'react'
+import './globals.css'
+import { generalSans } from './fonts/general-sans'
 
 export const metadata = {
   title: 'Business Workspace',
@@ -7,7 +9,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={generalSans.variable}>
       <body>{children}</body>
     </html>
   )

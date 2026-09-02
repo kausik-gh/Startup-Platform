@@ -99,7 +99,7 @@ export default async function ModuleDetailPage({
 
       {moduleDetail.features.length > 0 ? (
         <section style={{ marginTop: '2rem' }}>
-          <h2 style={{ fontSize: '1.15rem' }}>What it includes</h2>
+          <h2 >What it includes</h2>
           <ul style={{ paddingLeft: '1.1rem' }}>
             {moduleDetail.features.map((feature) => (
               <li key={feature.feature_id}>{feature.display_name || feature.feature_id}</li>
@@ -112,11 +112,5 @@ export default async function ModuleDetailPage({
 }
 
 const BUTTON: React.CSSProperties = {
-  padding: '0.55rem 1rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
+  justifySelf: 'start',
 }

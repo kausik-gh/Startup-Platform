@@ -87,7 +87,7 @@ export default async function CustomerDetailPage({
       </section>
 
       <section style={{ marginTop: '1.75rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Activity</h2>
+        <h2 >Activity</h2>
         {timeline.length === 0 ? (
           <p style={{ opacity: 0.8 }}>Nothing recorded for this customer yet.</p>
         ) : (
@@ -107,7 +107,7 @@ export default async function CustomerDetailPage({
       </section>
 
       <section style={{ marginTop: '1.75rem', maxWidth: '32rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Notes</h2>
+        <h2 >Notes</h2>
         {notes.length === 0 ? <p style={{ opacity: 0.8 }}>No notes yet.</p> : null}
         <ul style={{ paddingLeft: '1.1rem' }}>
           {notes.map((note) => (
@@ -134,19 +134,8 @@ export default async function CustomerDetailPage({
 }
 
 const INPUT: React.CSSProperties = {
-  padding: '0.5rem 0.6rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.2)',
-  font: 'inherit',
-  background: 'rgba(255,255,255,0.75)',
+  width: '100%',
 }
 const BUTTON: React.CSSProperties = {
-  padding: '0.5rem 0.9rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
   justifySelf: 'start',
 }

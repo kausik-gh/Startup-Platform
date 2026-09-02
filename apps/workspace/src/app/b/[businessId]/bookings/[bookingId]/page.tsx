@@ -59,7 +59,7 @@ export default async function BookingDetailPage({
       <p>
         <Link href={`/b/${params.businessId}/bookings`}>← Bookings</Link>
       </p>
-      <h1 style={{ fontSize: '2rem' }}>{String(b.booking_number)}</h1>
+      <h1>{String(b.booking_number)}</h1>
       <p>
         {String(b.title)} · {String(b.reservation_mode)} · {String(b.status)}
       </p>

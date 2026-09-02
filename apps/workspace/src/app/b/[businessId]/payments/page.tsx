@@ -93,8 +93,8 @@ export default async function PaymentsPage({
           style={{
             padding: '0.75rem 1rem',
             borderRadius: '8px',
-            background: 'rgba(138,109,31,0.1)',
-            border: '1px solid rgba(138,109,31,0.3)',
+            background: 'var(--status-warn-bg)',
+            border: '1px solid var(--status-warn-bd)',
             marginBottom: '1.25rem',
             fontSize: '0.9rem',
           }}

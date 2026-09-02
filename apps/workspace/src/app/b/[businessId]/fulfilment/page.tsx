@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { GateNotice, PageHeader } from '@/components/ModuleState'
+import { DataTable, EmptyState, GateNotice, PageHeader, StatusPill } from '@/components/ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +16,7 @@ export default async function FulfilmentBoardPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const base = `/b/${params.businessId}`
   const qs = new URLSearchParams()
   if (searchParams?.status) qs.set('status', searchParams.status)
   if (searchParams?.mode) qs.set('mode', searchParams.mode)
@@ -45,38 +46,45 @@ export default async function FulfilmentBoardPage({
 
   return (
     <div>
-      <h1 style={{ fontSize: '2rem' }}>Fulfilment</h1>
-      <p style={{ opacity: 0.8 }}>
-        Modes: {(settings.active_modes || []).join(', ') || 'none'} ·{' '}
-        <Link href={`/b/${params.businessId}/fulfilment/zones`}>Zones & charges</Link>
-      </p>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', opacity: 0.7 }}>
-            <th style={{ padding: '0.4rem' }}>Job</th>
-            <th style={{ padding: '0.4rem' }}>Mode</th>
-            <th style={{ padding: '0.4rem' }}>Status</th>
-            <th style={{ padding: '0.4rem' }}>Charge</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((job) => (
-            <tr key={String(job.id)} style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
-              <td style={{ padding: '0.55rem' }}>
-                <Link href={`/b/${params.businessId}/fulfilment/${job.id}`}>
-                  {String(job.id).slice(0, 8)}…
-                </Link>
-              </td>
-              <td style={{ padding: '0.55rem' }}>{String(job.mode)}</td>
-              <td style={{ padding: '0.55rem' }}>{String(job.status)}</td>
-              <td style={{ padding: '0.55rem' }}>
-                {String(job.currency)} {String(job.delivery_charge)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {jobs.length === 0 ? <p style={{ marginTop: '1rem' }}>No fulfilment jobs yet.</p> : null}
+      <PageHeader
+        title="Fulfilment"
+        subtitle={`Active modes: ${(settings.active_modes || []).join(', ') || 'none'}.`}
+        actions={
+          <Link href={`${base}/fulfilment/zones`} className="btn btn-ghost">
+            Zones & charges
+          </Link>
+        }
+      />
+      <DataTable
+        rows={jobs}
+        rowKey={(j) => String(j.id)}
+        columns={[
+          {
+            key: 'job',
+            header: 'Job',
+            render: (j) => (
+              <Link href={`${base}/fulfilment/${j.id}`}>{String(j.id).slice(0, 8)}…</Link>
+            ),
+          },
+          {
+            key: 'mode',
+            header: 'Mode',
+            render: (j) => <span style={{ textTransform: 'capitalize' }}>{String(j.mode)}</span>,
+          },
+          { key: 'status', header: 'Status', render: (j) => <StatusPill value={String(j.status)} /> },
+          {
+            key: 'charge',
+            header: 'Charge',
+            align: 'num',
+            render: (j) => `${String(j.currency)} ${String(j.delivery_charge)}`,
+          },
+        ]}
+        empty={
+          <EmptyState title="No fulfilment jobs yet">
+            A job is created for each order that needs pickup, delivery, or shipping.
+          </EmptyState>
+        }
+      />
     </div>
   )
 }

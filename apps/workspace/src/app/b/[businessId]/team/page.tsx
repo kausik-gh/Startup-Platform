@@ -58,8 +58,8 @@ export default async function TeamPage({ params }: { params: { businessId: strin
         style={{
           padding: '0.75rem 1rem',
           borderRadius: '8px',
-          background: 'rgba(138,109,31,0.1)',
-          border: '1px solid rgba(138,109,31,0.3)',
+          background: 'var(--status-warn-bg)',
+          border: '1px solid var(--status-warn-bd)',
           marginBottom: '1.25rem',
         }}
       >
@@ -137,7 +137,7 @@ export default async function TeamPage({ params }: { params: { businessId: strin
       {members.length === 0 ? <EmptyState>No team members yet.</EmptyState> : null}
 
       <section style={{ marginTop: '2rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Grant permissions</h2>
+        <h2 >Grant permissions</h2>
         <p style={{ opacity: 0.8 }}>
           Space- or comma-separated permission ids, for example{' '}
           <code>orders.read bookings.read</code>.
@@ -180,28 +180,20 @@ export default async function TeamPage({ params }: { params: { businessId: strin
 }
 
 const INPUT: React.CSSProperties = {
-  padding: '0.5rem 0.6rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.2)',
-  font: 'inherit',
-  background: 'rgba(255,255,255,0.75)',
+  width: '100%',
 }
 const SELECT: React.CSSProperties = { ...INPUT, padding: '0.3rem 0.4rem' }
 const BUTTON: React.CSSProperties = {
-  padding: '0.5rem 0.9rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
+  justifySelf: 'start',
 }
 const LINK_BUTTON: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#1c2430',
-  textDecoration: 'underline',
+  color: 'var(--color-primary)',
   cursor: 'pointer',
   font: 'inherit',
+  fontWeight: 500,
   padding: 0,
+  minHeight: 'auto',
+  textDecoration: 'underline',
 }

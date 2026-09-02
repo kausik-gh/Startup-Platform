@@ -53,8 +53,8 @@ export default async function WebsitePagesPage({
           style={{
             marginBottom: '1.5rem',
             padding: '1rem',
-            background: 'rgba(255,255,255,0.7)',
-            border: '1px solid rgba(28,36,48,0.1)',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
           }}
         >
           <h2 style={{ fontSize: '1.2rem' }}>

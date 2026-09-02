@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { GateNotice, PageHeader } from '@/components/ModuleState'
+import { DataTable, EmptyState, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { createWorkforceMember } from './actions'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +15,7 @@ export default async function WorkforcePage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const base = `/b/${params.businessId}`
   const [membersRes, locationsRes] = await Promise.all([
     apiTry<{ data: Array<Record<string, unknown>> }>(
       `/v1/platform/businesses/${params.businessId}/workforce/members`,
@@ -50,52 +51,50 @@ export default async function WorkforcePage({
 
   return (
     <div>
-      <h1 style={{ fontSize: '2rem' }}>Workforce</h1>
-      <p style={{ opacity: 0.8 }}>
-        Providers for bookings — identity linkage never grants Workspace access.
-      </p>
+      <PageHeader
+        title="Workforce"
+        subtitle="Providers available for bookings. Linking a provider to a platform identity never grants Workspace access."
+      />
 
-      <form
-        action={createMember}
-        style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '1.25rem' }}
-      >
-        <input name="display_name" placeholder="Display name" required />
-        <input name="designation" placeholder="Designation" />
-        <select name="location_id" defaultValue={String(primary?.id || '')}>
-          {locations.map((l) => (
-            <option key={String(l.id)} value={String(l.id)}>
-              {String(l.name)}
-            </option>
-          ))}
-        </select>
-        <button type="submit">Add provider</button>
-      </form>
+      <DataTable
+        rows={members}
+        rowKey={(m) => String(m.id)}
+        columns={[
+          {
+            key: 'name',
+            header: 'Name',
+            render: (m) => (
+              <Link href={`${base}/workforce/${m.id}`}>{String(m.display_name)}</Link>
+            ),
+          },
+          { key: 'status', header: 'Status', render: (m) => <StatusPill value={String(m.status)} /> },
+          {
+            key: 'identity',
+            header: 'Identity linked',
+            render: (m) => (
+              <span style={{ color: 'var(--color-muted)' }}>
+                {m.identity_id ? 'Yes — no Workspace grant' : 'No'}
+              </span>
+            ),
+          },
+        ]}
+        empty={<EmptyState title="No providers yet">Add one below to make it bookable.</EmptyState>}
+      />
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1.5rem' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', opacity: 0.7 }}>
-            <th style={{ padding: '0.4rem' }}>Name</th>
-            <th style={{ padding: '0.4rem' }}>Status</th>
-            <th style={{ padding: '0.4rem' }}>Identity linked</th>
-          </tr>
-        </thead>
-        <tbody>
-          {members.map((m) => (
-            <tr key={String(m.id)} style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
-              <td style={{ padding: '0.55rem' }}>
-                <Link href={`/b/${params.businessId}/workforce/${m.id}`}>
-                  {String(m.display_name)}
-                </Link>
-              </td>
-              <td style={{ padding: '0.55rem' }}>{String(m.status)}</td>
-              <td style={{ padding: '0.55rem' }}>
-                {m.identity_id ? 'Yes (no Workspace grant)' : 'No'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {members.length === 0 ? <p style={{ marginTop: '1rem' }}>No providers yet.</p> : null}
+      <Section title="Add a provider">
+        <form action={createMember} style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', maxWidth: '44rem' }}>
+          <input name="display_name" placeholder="Display name" required />
+          <input name="designation" placeholder="Designation" />
+          <select name="location_id" defaultValue={String(primary?.id || '')}>
+            {locations.map((l) => (
+              <option key={String(l.id)} value={String(l.id)}>
+                {String(l.name)}
+              </option>
+            ))}
+          </select>
+          <button type="submit">Add provider</button>
+        </form>
+      </Section>
     </div>
   )
 }

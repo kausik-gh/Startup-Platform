@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { GateNotice, PageHeader } from '@/components/ModuleState'
+import { DataTable, EmptyState, FilterTabs, GateNotice, PageHeader, StatusPill } from '@/components/ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,6 +27,7 @@ export default async function OrdersBoardPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const base = `/b/${params.businessId}`
   const qs = searchParams?.status ? `?status=${encodeURIComponent(searchParams.status)}` : ''
   const res = await apiTry<{ data: OrderRow[] }>(
     `/v1/platform/businesses/${params.businessId}/orders${qs}`,
@@ -44,45 +45,54 @@ export default async function OrdersBoardPage({
 
   return (
     <div>
-      <h1 style={{ fontSize: '2rem' }}>Orders</h1>
-      <p style={{ opacity: 0.8 }}>Board / list — accept, prepare, complete, cancel from detail.</p>
-      <div style={{ display: 'flex', gap: '0.5rem', margin: '1rem 0', flexWrap: 'wrap' }}>
-        {['', 'pending', 'accepted', 'preparing', 'ready', 'completed', 'cancelled'].map((s) => (
-          <Link
-            key={s || 'all'}
-            href={`/b/${params.businessId}/orders${s ? `?status=${s}` : ''}`}
-          >
-            {s || 'all'}
-          </Link>
-        ))}
-      </div>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', opacity: 0.7 }}>
-            <th style={{ padding: '0.4rem' }}>Order</th>
-            <th style={{ padding: '0.4rem' }}>Status</th>
-            <th style={{ padding: '0.4rem' }}>Payment</th>
-            <th style={{ padding: '0.4rem' }}>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map((o) => (
-            <tr key={o.id} style={{ borderTop: '1px solid rgba(0,0,0,0.1)' }}>
-              <td style={{ padding: '0.55rem' }}>
-                <Link href={`/b/${params.businessId}/orders/${o.id}`}>{o.order_number}</Link>
-              </td>
-              <td style={{ padding: '0.55rem' }}>{o.status}</td>
-              <td style={{ padding: '0.55rem' }}>
-                {o.payment_method} / {o.payment_status}
-              </td>
-              <td style={{ padding: '0.55rem' }}>
-                {o.currency} {o.total_amount}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {orders.length === 0 ? <p style={{ marginTop: '1rem' }}>No orders yet.</p> : null}
+      <PageHeader title="Orders" subtitle="Accept, prepare, complete, or cancel each order from its detail page." />
+      <FilterTabs
+        current={searchParams?.status}
+        hrefFor={(v) => `${base}/orders${v ? `?status=${v}` : ''}`}
+        options={[
+          { value: '', label: 'All' },
+          { value: 'pending', label: 'Pending' },
+          { value: 'accepted', label: 'Accepted' },
+          { value: 'preparing', label: 'Preparing' },
+          { value: 'ready', label: 'Ready' },
+          { value: 'completed', label: 'Completed' },
+          { value: 'cancelled', label: 'Cancelled' },
+        ]}
+      />
+      <DataTable
+        rows={orders}
+        rowKey={(o) => o.id}
+        columns={[
+          {
+            key: 'order_number',
+            header: 'Order',
+            render: (o) => <Link href={`${base}/orders/${o.id}`}>{o.order_number}</Link>,
+          },
+          { key: 'status', header: 'Status', render: (o) => <StatusPill value={o.status} /> },
+          {
+            key: 'payment',
+            header: 'Payment',
+            render: (o) => (
+              <span style={{ color: 'var(--color-muted)' }}>
+                {o.payment_method} · {o.payment_status}
+              </span>
+            ),
+          },
+          {
+            key: 'total',
+            header: 'Total',
+            align: 'num',
+            render: (o) => `${o.currency} ${o.total_amount}`,
+          },
+        ]}
+        empty={
+          <EmptyState title="No orders here">
+            {searchParams?.status
+              ? `Nothing with status "${searchParams.status}" right now.`
+              : 'Orders placed on your website land here for you to accept.'}
+          </EmptyState>
+        }
+      />
     </div>
   )
 }

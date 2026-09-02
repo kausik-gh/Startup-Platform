@@ -63,7 +63,7 @@ export default async function FulfilmentJobDetailPage({
         Charge: {job.currency} {job.delivery_charge}
       </p>
       {job.delivery_address ? (
-        <pre style={{ background: 'rgba(255,255,255,0.6)', padding: '0.75rem' }}>
+        <pre style={{ background: 'var(--color-surface)', padding: '0.75rem' }}>
           {JSON.stringify(job.delivery_address, null, 2)}
         </pre>
       ) : null}

@@ -89,14 +89,14 @@ export default async function WorkforceMemberPage({
       <p>
         <Link href={`/b/${params.businessId}/workforce`}>← Workforce</Link>
       </p>
-      <h1 style={{ fontSize: '2rem' }}>{String(m.display_name)}</h1>
+      <h1>{String(m.display_name)}</h1>
       <p>
         {String(m.designation || 'Provider')} · {String(m.status)} · grants_workspace_access=
         {String(m.grants_workspace_access)}
       </p>
 
       <section style={{ marginTop: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Location applicability</h2>
+        <h2 >Location applicability</h2>
         <ul>
           {((m.locations as Array<Record<string, unknown>>) || []).map((l) => (
             <li key={String(l.location_id)}>{String(l.location_id)}</li>
@@ -115,7 +115,7 @@ export default async function WorkforceMemberPage({
       </section>
 
       <section style={{ marginTop: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Service association</h2>
+        <h2 >Service association</h2>
         <ul>
           {((m.services as Array<Record<string, unknown>>) || []).map((s) => (
             <li key={String(s.offering_id)}>{String(s.offering_id)}</li>
@@ -134,7 +134,7 @@ export default async function WorkforceMemberPage({
       </section>
 
       <section style={{ marginTop: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Schedules / availability</h2>
+        <h2 >Schedules / availability</h2>
         <ul>
           {((m.availability as Array<Record<string, unknown>>) || []).map((a) => (
             <li key={String(a.id)}>

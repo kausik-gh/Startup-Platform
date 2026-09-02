@@ -105,7 +105,7 @@ export default async function InvitationsPage({ params }: { params: { businessId
       ) : null}
 
       <section style={{ marginTop: '2rem', maxWidth: '32rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Invite someone</h2>
+        <h2 >Invite someone</h2>
         <form action={createInvitation} style={{ display: 'grid', gap: '0.6rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input
@@ -129,28 +129,19 @@ export default async function InvitationsPage({ params }: { params: { businessId
 }
 
 const INPUT: React.CSSProperties = {
-  padding: '0.5rem 0.6rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.2)',
-  font: 'inherit',
-  background: 'rgba(255,255,255,0.75)',
+  width: '100%',
 }
 const BUTTON: React.CSSProperties = {
-  padding: '0.55rem 1rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
   justifySelf: 'start',
 }
 const LINK_BUTTON: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#1c2430',
-  textDecoration: 'underline',
+  color: 'var(--color-primary)',
   cursor: 'pointer',
   font: 'inherit',
+  fontWeight: 500,
   padding: 0,
+  minHeight: 'auto',
+  textDecoration: 'underline',
 }

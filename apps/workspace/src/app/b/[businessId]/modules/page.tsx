@@ -66,7 +66,7 @@ export default async function ModuleCatalogPage({ params }: { params: { business
       />
 
       <section>
-        <h2 style={{ fontSize: '1.15rem' }}>Available modules</h2>
+        <h2 >Available modules</h2>
         <div style={{ display: 'grid', gap: '0.75rem', marginTop: '0.75rem' }}>
           {optional.map((item) => {
             const state = states.get(item.module_id)
@@ -83,8 +83,8 @@ export default async function ModuleCatalogPage({ params }: { params: { business
                   flexWrap: 'wrap',
                   padding: '0.9rem 1.1rem',
                   borderRadius: '10px',
-                  border: '1px solid rgba(28,36,48,0.12)',
-                  background: 'rgba(255,255,255,0.55)',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
                 }}
               >
                 <div>
@@ -125,7 +125,7 @@ export default async function ModuleCatalogPage({ params }: { params: { business
 
       {core.length > 0 ? (
         <section style={{ marginTop: '2rem' }}>
-          <h2 style={{ fontSize: '1.15rem' }}>Always included</h2>
+          <h2 >Always included</h2>
           <p style={{ opacity: 0.8 }}>
             These are part of every Business and cannot be turned off.
           </p>
@@ -136,8 +136,8 @@ export default async function ModuleCatalogPage({ params }: { params: { business
                 style={{
                   padding: '0.3rem 0.7rem',
                   borderRadius: '999px',
-                  border: '1px solid rgba(28,36,48,0.18)',
-                  background: 'rgba(255,255,255,0.6)',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
                 }}
               >
                 {item.display_name}
@@ -151,11 +151,5 @@ export default async function ModuleCatalogPage({ params }: { params: { business
 }
 
 const BUTTON: React.CSSProperties = {
-  padding: '0.45rem 0.9rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
+  justifySelf: 'start',
 }

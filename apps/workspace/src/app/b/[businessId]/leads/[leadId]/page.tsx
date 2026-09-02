@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { apiTry } from '@/lib/api'
-import { GateNotice, PageHeader, StatusPill } from '@/components/ModuleState'
+import { DetailShell, GateNotice, PageHeader, Section, StatusPill } from '@/components/ui'
 import { addLeadNote, moveLeadStage } from '../actions'
 
 export const dynamic = 'force-dynamic'
@@ -37,6 +37,7 @@ export default async function LeadDetailPage({
 }) {
   const token = await getAccessToken()
   if (!token) redirect('/login')
+  const back = `/b/${params.businessId}/leads`
 
   const res = await apiTry<{ data: LeadDetail }>(
     `/v1/platform/businesses/${params.businessId}/leads/${params.leadId}`,
@@ -45,8 +46,7 @@ export default async function LeadDetailPage({
   if (!res.ok) {
     return (
       <div>
-        <Link href={`/b/${params.businessId}/leads`}>← Leads</Link>
-        <PageHeader title="Lead" />
+        <PageHeader title="Lead" breadcrumb={<Link href={back}>← Leads</Link>} />
         <GateNotice error={res.error} businessId={params.businessId} moduleLabel="Leads" />
       </div>
     )
@@ -56,18 +56,28 @@ export default async function LeadDetailPage({
   const next = NEXT_STAGE[lead.status] ?? []
 
   return (
-    <div>
-      <Link href={`/b/${params.businessId}/leads`}>← Leads</Link>
-      <PageHeader
-        title={lead.display_name}
-        subtitle={[lead.email, lead.phone].filter(Boolean).join(' · ') || undefined}
-      />
-
-      <p>
-        Stage: <StatusPill value={lead.status} /> · Source: {lead.source}
-      </p>
-      {lead.lost_reason ? <p>Lost because: {lead.lost_reason}</p> : null}
-      {lead.message ? <p style={{ opacity: 0.85 }}>“{lead.message}”</p> : null}
+    <DetailShell
+      breadcrumb={<Link href={back}>← Leads</Link>}
+      title={lead.display_name}
+      status={<StatusPill value={lead.status} />}
+      meta={[
+        ['Contact', [lead.email, lead.phone].filter(Boolean).join(' · ') || '—'],
+        ['Source', lead.source],
+        ...(lead.lost_reason ? ([['Lost because', lead.lost_reason]] as [string, string][]) : []),
+      ]}
+    >
+      {lead.message ? (
+        <blockquote
+          style={{
+            margin: '0 0 1.5rem',
+            padding: '0.75rem 1rem',
+            borderLeft: '3px solid var(--color-border-strong)',
+            color: 'var(--color-muted)',
+          }}
+        >
+          “{lead.message}”
+        </blockquote>
+      ) : null}
       {lead.customer_contact_id ? (
         <p>
           Converted to{' '}
@@ -78,88 +88,70 @@ export default async function LeadDetailPage({
         </p>
       ) : null}
 
-      <section style={{ marginTop: '1.5rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Move stage</h2>
+      <Section title="Move stage">
         {next.length === 0 ? (
-          <p style={{ opacity: 0.8 }}>
+          <p style={{ color: 'var(--color-muted)' }}>
             Won is the final stage — this lead stays on record as history.
           </p>
         ) : (
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
             {next.map((stage) => (
-              <form key={stage} action={moveLeadStage}>
+              <form key={stage} action={moveLeadStage} style={{ display: 'flex', gap: '0.35rem' }}>
                 <input type="hidden" name="businessId" value={params.businessId} />
                 <input type="hidden" name="leadId" value={params.leadId} />
                 <input type="hidden" name="status" value={stage} />
                 {stage === 'lost' ? (
-                  <input
-                    name="reason"
-                    placeholder="Reason (required)"
-                    required
-                    style={{ ...INPUT, marginRight: '0.35rem' }}
-                  />
+                  <input name="reason" placeholder="Reason (required)" required />
                 ) : null}
-                <button type="submit" style={BUTTON}>
+                <button type="submit" className="btn-ghost" style={{ textTransform: 'capitalize' }}>
                   {stage}
                 </button>
               </form>
             ))}
           </div>
         )}
-      </section>
+      </Section>
 
-      <section style={{ marginTop: '1.75rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>History</h2>
-        <ol style={{ paddingLeft: '1.1rem' }}>
+      <Section title="History">
+        <ol style={{ margin: 0, paddingLeft: '1.1rem', color: 'var(--color-foreground)' }}>
           {lead.status_history.map((event, idx) => (
             <li key={idx} style={{ marginBottom: '0.3rem' }}>
               {event.from_status ? `${event.from_status} → ` : 'created as '}
               <strong>{event.to_status}</strong>
-              <span style={{ opacity: 0.6 }}> · {new Date(event.created_at).toLocaleString()}</span>
+              <span style={{ color: 'var(--color-muted)' }}>
+                {' '}
+                · {new Date(event.created_at).toLocaleString()}
+              </span>
             </li>
           ))}
         </ol>
-      </section>
+      </Section>
 
-      <section style={{ marginTop: '1.75rem', maxWidth: '32rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Notes</h2>
-        {lead.notes.length === 0 ? <p style={{ opacity: 0.8 }}>No notes yet.</p> : null}
-        <ul style={{ paddingLeft: '1.1rem' }}>
-          {lead.notes.map((note) => (
-            <li key={note.id} style={{ marginBottom: '0.4rem' }}>
-              {note.body}
-              <span style={{ opacity: 0.6 }}> · {new Date(note.created_at).toLocaleString()}</span>
-            </li>
-          ))}
-        </ul>
-        <form action={addLeadNote} style={{ display: 'grid', gap: '0.5rem', marginTop: '0.75rem' }}>
+      <Section title="Notes" style={{ maxWidth: '34rem' }}>
+        {lead.notes.length === 0 ? (
+          <p style={{ color: 'var(--color-muted)' }}>No notes yet.</p>
+        ) : (
+          <ul style={{ margin: '0 0 0.75rem', paddingLeft: '1.1rem' }}>
+            {lead.notes.map((note) => (
+              <li key={note.id} style={{ marginBottom: '0.4rem' }}>
+                {note.body}
+                <span style={{ color: 'var(--color-muted)' }}>
+                  {' '}
+                  · {new Date(note.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action={addLeadNote} style={{ display: 'grid', gap: '0.5rem' }}>
           <input type="hidden" name="businessId" value={params.businessId} />
           <input type="hidden" name="leadId" value={params.leadId} />
-          <textarea name="body" placeholder="Add a note" required style={INPUT} />
-          <button type="submit" style={BUTTON}>
+          <textarea name="body" placeholder="Add a note" required />
+          <button type="submit" style={{ justifySelf: 'start' }}>
             Add note
           </button>
         </form>
-      </section>
-    </div>
+      </Section>
+    </DetailShell>
   )
-}
-
-const INPUT: React.CSSProperties = {
-  padding: '0.5rem 0.6rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.2)',
-  font: 'inherit',
-  background: 'rgba(255,255,255,0.75)',
-}
-
-const BUTTON: React.CSSProperties = {
-  padding: '0.5rem 0.9rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
-  justifySelf: 'start',
 }

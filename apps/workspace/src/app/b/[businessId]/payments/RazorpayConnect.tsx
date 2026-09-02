@@ -21,16 +21,11 @@ const INITIAL: RazorpayState = { ok: false, error: null }
 const CARD: React.CSSProperties = {
   padding: '1.25rem 1.4rem',
   borderRadius: '10px',
-  border: '1px solid rgba(28,36,48,0.14)',
-  background: 'rgba(255,255,255,0.6)',
+  border: '1px solid var(--color-border)',
+  background: 'var(--color-surface)',
   maxWidth: '38rem',
 }
 const INPUT: React.CSSProperties = {
-  padding: '0.55rem 0.7rem',
-  borderRadius: '7px',
-  border: '1px solid rgba(28,36,48,0.28)',
-  fontSize: '0.95rem',
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
   width: '100%',
 }
 
@@ -50,7 +45,7 @@ function Pill({ m }: { m: Merchant }) {
     good: ['#1c5f2f', 'rgba(28,95,47,0.12)', 'rgba(28,95,47,0.4)'],
     warn: ['#8a6d1f', 'rgba(138,109,31,0.12)', 'rgba(138,109,31,0.4)'],
     bad: ['#a33333', 'rgba(163,51,51,0.12)', 'rgba(163,51,51,0.4)'],
-    neutral: ['#4c5967', 'rgba(28,36,48,0.08)', 'rgba(28,36,48,0.2)'],
+    neutral: ['#4c5967', 'rgba(28,36,48,0.08)', 'var(--color-border-strong)'],
   }[tone]
   return (
     <span
@@ -156,8 +151,8 @@ export function RazorpayConnect({
             margin: '0 0 0.9rem',
             padding: '0.6rem 0.85rem',
             borderRadius: '7px',
-            border: '1px solid rgba(163,51,51,0.35)',
-            background: 'rgba(163,51,51,0.08)',
+            border: '1px solid var(--status-bad-bd)',
+            background: 'var(--status-bad-bg)',
             color: '#8d2f24',
             fontSize: '0.88rem',
             lineHeight: 1.5,

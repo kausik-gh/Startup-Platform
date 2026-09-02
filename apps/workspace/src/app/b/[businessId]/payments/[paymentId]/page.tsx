@@ -79,8 +79,8 @@ export default async function PaymentDetailPage({
           style={{
             padding: '0.75rem 1rem',
             borderRadius: '8px',
-            background: 'rgba(163,51,51,0.08)',
-            border: '1px solid rgba(163,51,51,0.25)',
+            background: 'var(--status-bad-bg)',
+            border: '1px solid var(--status-bad-bd)',
           }}
         >
           This payment failed: {payment.failure_reason}
@@ -94,7 +94,7 @@ export default async function PaymentDetailPage({
 
       {canSettle ? (
         <section style={{ marginTop: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.15rem' }}>Record settlement</h2>
+          <h2 >Record settlement</h2>
           <p style={{ opacity: 0.8 }}>
             Mark this as paid once you have received the money in person.
           </p>
@@ -110,7 +110,7 @@ export default async function PaymentDetailPage({
 
       {canRefund ? (
         <section style={{ marginTop: '1.75rem', maxWidth: '28rem' }}>
-          <h2 style={{ fontSize: '1.15rem' }}>Refund</h2>
+          <h2 >Refund</h2>
           <form action={refundPayment} style={{ display: 'grid', gap: '0.6rem' }}>
             <input type="hidden" name="businessId" value={params.businessId} />
             <input type="hidden" name="paymentId" value={params.paymentId} />
@@ -134,7 +134,7 @@ export default async function PaymentDetailPage({
 
       {refunds.length > 0 ? (
         <section style={{ marginTop: '1.75rem' }}>
-          <h2 style={{ fontSize: '1.15rem' }}>Refund history</h2>
+          <h2 >Refund history</h2>
           <table style={TABLE}>
             <thead>
               <tr>
@@ -166,19 +166,8 @@ export default async function PaymentDetailPage({
 }
 
 const INPUT: React.CSSProperties = {
-  padding: '0.5rem 0.6rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.2)',
-  font: 'inherit',
-  background: 'rgba(255,255,255,0.75)',
+  width: '100%',
 }
 const BUTTON: React.CSSProperties = {
-  padding: '0.55rem 1rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
   justifySelf: 'start',
 }

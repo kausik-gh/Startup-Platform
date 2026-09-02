@@ -78,7 +78,7 @@ export default async function MembershipsPage({ params }: { params: { businessId
       />
 
       <section>
-        <h2 style={{ fontSize: '1.15rem' }}>Plans</h2>
+        <h2 >Plans</h2>
         <table style={TABLE}>
           <thead>
             <tr>
@@ -123,7 +123,7 @@ export default async function MembershipsPage({ params }: { params: { businessId
       </section>
 
       <section style={{ marginTop: '2.25rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Enrolments</h2>
+        <h2 >Enrolments</h2>
         <table style={TABLE}>
           <thead>
             <tr>
@@ -168,7 +168,7 @@ export default async function MembershipsPage({ params }: { params: { businessId
       </section>
 
       <section style={{ marginTop: '2.25rem', maxWidth: '32rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>Create a plan</h2>
+        <h2 >Create a plan</h2>
         <p style={{ opacity: 0.75, fontSize: '0.9rem' }}>
           Plans run for a fixed period and are renewed manually. Automatic recurring billing is not
           available yet.
@@ -211,28 +211,19 @@ export default async function MembershipsPage({ params }: { params: { businessId
 }
 
 const INPUT: React.CSSProperties = {
-  padding: '0.5rem 0.6rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.2)',
-  font: 'inherit',
-  background: 'rgba(255,255,255,0.75)',
+  width: '100%',
 }
 const BUTTON: React.CSSProperties = {
-  padding: '0.55rem 1rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
   justifySelf: 'start',
 }
 const LINK_BUTTON: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#1c2430',
-  textDecoration: 'underline',
+  color: 'var(--color-primary)',
   cursor: 'pointer',
   font: 'inherit',
+  fontWeight: 500,
   padding: 0,
+  minHeight: 'auto',
+  textDecoration: 'underline',
 }

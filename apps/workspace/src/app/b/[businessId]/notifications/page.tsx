@@ -36,7 +36,7 @@ const DESTINATION: Record<string, string> = {
 }
 
 const SEVERITY_TONE: Record<string, string> = {
-  info: 'rgba(28,36,48,0.12)',
+  info: 'var(--color-border)',
   warning: 'rgba(138,109,31,0.35)',
   critical: 'rgba(163,51,51,0.4)',
 }
@@ -129,8 +129,8 @@ export default async function NotificationsPage({
                 borderRadius: '10px',
                 border: `1px solid ${SEVERITY_TONE[notification.severity] ?? SEVERITY_TONE.info}`,
                 background: notification.read_at
-                  ? 'rgba(255,255,255,0.4)'
-                  : 'rgba(255,255,255,0.75)',
+                  ? 'var(--color-surface)'
+                  : 'var(--color-surface)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 gap: '1rem',
@@ -172,7 +172,7 @@ export default async function NotificationsPage({
       ) : null}
 
       <section style={{ marginTop: '2.25rem', maxWidth: '32rem' }}>
-        <h2 style={{ fontSize: '1.15rem' }}>What you get notified about</h2>
+        <h2 >What you get notified about</h2>
         {preferences.map((preference) => (
           <form
             key={preference.category}
@@ -200,20 +200,16 @@ export default async function NotificationsPage({
 }
 
 const BUTTON: React.CSSProperties = {
-  padding: '0.5rem 0.9rem',
-  borderRadius: '6px',
-  border: '1px solid rgba(28,36,48,0.25)',
-  background: 'rgba(28,36,48,0.9)',
-  color: '#f7f3eb',
-  font: 'inherit',
-  cursor: 'pointer',
+  justifySelf: 'start',
 }
 const LINK_BUTTON: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#1c2430',
-  textDecoration: 'underline',
+  color: 'var(--color-primary)',
   cursor: 'pointer',
   font: 'inherit',
+  fontWeight: 500,
   padding: 0,
+  minHeight: 'auto',
+  textDecoration: 'underline',
 }

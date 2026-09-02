@@ -1,80 +1,55 @@
-import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { ReactNode } from 'react'
+import { getAccessToken } from '@/lib/supabase/access-token'
+import { apiTry, businessHeaders } from '@/lib/api'
+import { AppSidebar, type NavBusiness } from '@/components/AppSidebar'
 
-const NAV = [
-  { href: '', label: 'Home', id: 'CORE-001' },
-  { href: '/profile', label: 'Profile', id: 'CORE-002' },
-  { href: '/brand', label: 'Brand & Media', id: 'CORE-003' },
-  { href: '/website', label: 'Website', id: 'CORE-004' },
-  { href: '/website/pages', label: 'Pages', id: 'CORE-005' },
-  { href: '/website/theme', label: 'Theme', id: 'CORE-006' },
-  { href: '/website/publish', label: 'Preview & Publish', id: 'CORE-007' },
-  { href: '/locations', label: 'Locations', id: 'CORE-008' },
-  { href: '/team', label: 'Team', id: 'CORE-010' },
-  { href: '/modules', label: 'Modules', id: 'CORE-013' },
-  { href: '/notifications', label: 'Notifications', id: 'CORE-015' },
-  { href: '/settings', label: 'Settings', id: 'CORE-016' },
-  { href: '/marketplace', label: 'Marketplace', id: 'CORE-MP' },
-  { href: '/offerings', label: 'Offerings', id: 'OFF-001' },
-  { href: '/inventory', label: 'Inventory', id: 'INV-001' },
-  { href: '/orders', label: 'Orders', id: 'ORD-001' },
-  { href: '/fulfilment', label: 'Fulfilment', id: 'FUL-001' },
-  { href: '/bookings', label: 'Bookings', id: 'BK-001' },
-  { href: '/workforce', label: 'Workforce', id: 'WF-001' },
-  { href: '/customers', label: 'Customers', id: 'CRM-001' },
-  { href: '/leads', label: 'Leads', id: 'LEAD-001' },
-  { href: '/memberships', label: 'Memberships', id: 'MEM-001' },
-  { href: '/payments', label: 'Payments', id: 'PAY-001' },
-]
+export const dynamic = 'force-dynamic'
 
-export default function WorkspaceBusinessLayout({
+type Context = {
+  module_states: Record<string, string>
+}
+
+/**
+ * Business workspace shell. Fetches only what the sidebar needs — the business
+ * list for the switcher, module states for the module-aware nav, and the
+ * unread count — in one parallel round. No page logic here.
+ */
+export default async function WorkspaceBusinessLayout({
   children,
   params,
 }: {
   children: ReactNode
   params: { businessId: string }
 }) {
-  const base = `/b/${params.businessId}`
+  const token = await getAccessToken()
+  if (!token) redirect('/login')
+
+  const bh = businessHeaders(params.businessId)
+  const [businessesRes, contextRes, unreadRes] = await Promise.all([
+    apiTry<{ data: NavBusiness[] }>('/v1/platform/businesses', token),
+    apiTry<{ data: Context }>('/v1/me/context', token, bh),
+    apiTry<{ data: { unread_count: number } }>(
+      `/v1/platform/businesses/${params.businessId}/notifications/unread-count`,
+      token
+    ),
+  ])
+
+  const businesses = businessesRes.ok ? businessesRes.data.data : []
+  const moduleStates = contextRes.ok ? contextRes.data.data.module_states ?? {} : {}
+  const unreadCount = unreadRes.ok ? unreadRes.data.data.unread_count : 0
+
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '240px 1fr',
-        minHeight: '100vh',
-        fontFamily: 'Georgia, "Times New Roman", serif',
-        background: 'linear-gradient(160deg, #f7f3eb 0%, #e8eef2 100%)',
-        color: '#1c2430',
-      }}
-    >
-      <aside
-        style={{
-          padding: '1.5rem 1rem',
-          borderRight: '1px solid rgba(28,36,48,0.12)',
-          background: 'rgba(255,255,255,0.55)',
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: '1.25rem', letterSpacing: '0.02em' }}>
-          Workspace
-        </div>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-          {NAV.map((item) => (
-            <Link
-              key={item.id}
-              href={`${base}${item.href}`}
-              style={{
-                textDecoration: 'none',
-                color: '#1c2430',
-                padding: '0.45rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.95rem',
-              }}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
-      <main style={{ padding: '2rem' }}>{children}</main>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-background)' }}>
+      <AppSidebar
+        businessId={params.businessId}
+        businesses={businesses}
+        moduleStates={moduleStates}
+        unreadCount={unreadCount}
+      />
+      <main className="ws-page" style={{ flex: 1, minWidth: 0 }}>
+        {children}
+      </main>
     </div>
   )
 }

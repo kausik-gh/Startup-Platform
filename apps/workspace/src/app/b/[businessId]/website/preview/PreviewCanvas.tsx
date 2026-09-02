@@ -224,7 +224,7 @@ function ImageSlot({
           fontSize: '0.8rem',
           fontFamily: 'system-ui, sans-serif',
           cursor: busy ? 'wait' : 'pointer',
-          background: 'rgba(255,255,255,0.75)',
+          background: 'var(--color-surface)',
           color: '#33404e',
         }}
       >
@@ -302,7 +302,7 @@ export function PreviewCanvas({
           >
             {page.title} — /{page.slug}
           </div>
-          <div style={{ border: '1px solid rgba(28,36,48,0.14)', borderRadius: 10, overflow: 'hidden', background: '#faf8f4' }}>
+          <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden', background: '#faf8f4' }}>
             {page.sections.map((section) => {
               const c = sections[section.id] || {}
               const fields = FIELDS[section.section_type_id] || GENERIC
@@ -332,7 +332,7 @@ export function PreviewCanvas({
                       right: 8,
                       fontFamily: 'system-ui, sans-serif',
                       fontSize: '0.68rem',
-                      color: isHero ? 'rgba(255,255,255,0.7)' : '#8a94a0',
+                      color: isHero ? 'var(--color-surface)' : '#8a94a0',
                     }}
                   >
                     {section.section_type_id}
