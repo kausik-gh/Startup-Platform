@@ -200,3 +200,60 @@ DEFAULT_PAGES: list[tuple[str, str, str]] = [
     ("about", "About", "about"),
     ("contact", "Contact", "contact"),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Prompt-side section catalogue for AI generation.
+#
+# WEBSITE_GENERATION_SCHEMA only describes the envelope (a section has a
+# `section_type_id` and an opaque `content` object). Without the per-type field
+# list, the model invents section types ("booking_section") and fields
+# ("cta_primary_label"). This spec is the authoritative description handed to
+# the model. Keep it in sync with `website_section_types` (seed 00_platform.sql)
+# and the DB `page_type` CHECK constraint.
+# ---------------------------------------------------------------------------
+
+SECTION_CATALOGUE_PROMPT = """\
+SECTION TYPES — use ONLY these `section_type_id` values, and inside each
+section's `content` use ONLY the fields listed for that type. Do not invent
+section types or content fields.
+
+- hero: headline (REQUIRED), subheadline, cta_label, cta_url
+    layout_variant: centered | left_aligned | image_left | image_right | full_width
+- about: title, body
+    layout_variant: text_only | image_left | image_right
+- text_block: body (REQUIRED), title
+    layout_variant: default | highlighted
+- cta_band: headline (REQUIRED), cta_label (REQUIRED), body, cta_url
+    layout_variant: centered | left_aligned
+- contact: title, address, phone, email, hours_summary, show_map (boolean)
+    layout_variant: full | compact
+- enquiry_form: title, subtitle
+    layout_variant: default | compact
+- gallery: title
+    layout_variant: grid | masonry | carousel
+- offerings_list: title, subtitle, max_items (integer), offering_types (array of strings)
+    layout_variant: cards | list | grid
+- menu_section: title, show_prices (boolean), category_filter
+    layout_variant: categorized | simple
+- plans_section: title, subtitle
+    layout_variant: cards | comparison
+- rooms_section: title, subtitle
+    layout_variant: cards | list
+- classes_section: title, max_items (integer), show_upcoming_only (boolean)
+    layout_variant: schedule | cards
+- location_list: title, show_map (boolean), show_hours (boolean)
+    layout_variant: cards | list
+
+The list sections (offerings_list, menu_section, plans_section, rooms_section,
+classes_section, location_list) render the business's own live records — write
+only their title/subtitle, never the individual items. Do not include image
+fields; images are added separately.
+
+`page_type` must be exactly one of:
+home, about, contact, locations, offerings, services, menu, rooms, plans,
+classes, enquire, custom
+
+`cta_url` and any path must be a relative path like "/contact" or "/services" —
+never an absolute URL.
+"""

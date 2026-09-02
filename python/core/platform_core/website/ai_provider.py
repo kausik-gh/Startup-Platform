@@ -20,7 +20,10 @@ from platform_core.logging import get_logger
 _log = get_logger("website.ai_provider")
 
 # Content generation only — never platform mechanics (Doc 12 §12.6).
-_DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+# `gemini-flash-latest` is the never-retiring alias but has been flaky under
+# load (503s); `gemini-3.6-flash` is the current concrete recommendation and
+# the retry loop + deterministic fallback cover a model going away again.
+_DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 
 @runtime_checkable

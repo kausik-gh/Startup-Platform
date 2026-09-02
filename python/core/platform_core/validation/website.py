@@ -17,6 +17,32 @@ def _field_error(field: str, message: str) -> dict[str, str]:
     return {"field": field, "message": message}
 
 
+# DB CHECK on website_pages.page_type. AI output drifts to synonyms; coerce
+# rather than reject the whole draft.
+_ALLOWED_PAGE_TYPES = frozenset(
+    {
+        "home", "about", "contact", "locations", "offerings", "services",
+        "menu", "rooms", "plans", "classes", "enquire", "custom",
+    }
+)
+_PAGE_TYPE_SYNONYMS = {
+    "landing": "home", "homepage": "home", "index": "home", "main": "home",
+    "products": "offerings", "shop": "offerings", "catalog": "offerings",
+    "catalogue": "offerings", "store": "offerings",
+    "team": "about", "story": "about", "our-story": "about", "info": "about",
+    "location": "locations", "find-us": "locations", "visit": "locations",
+    "book": "enquire", "booking": "enquire", "contact-us": "contact",
+    "gallery": "custom", "faq": "custom", "reviews": "custom", "pricing": "plans",
+}
+
+
+def _coerce_page_type(raw: Any) -> str:
+    value = str(raw or "").strip().lower().replace(" ", "-")
+    if value in _ALLOWED_PAGE_TYPES:
+        return value
+    return _PAGE_TYPE_SYNONYMS.get(value, "custom")
+
+
 def assert_no_unsafe_content(value: Any, *, path: str = "content") -> None:
     if isinstance(value, dict):
         for key, nested in value.items():
@@ -41,7 +67,13 @@ def assert_no_unsafe_content(value: Any, *, path: str = "content") -> None:
         )
 
 
-def _validate_against_schema(content: dict[str, Any], schema: dict[str, Any], *, field: str) -> None:
+def _validate_against_schema(
+    content: dict[str, Any], schema: dict[str, Any], *, field: str, lenient: bool = False
+) -> dict[str, Any]:
+    """Strict by default (manual edits — a stray field is a typo worth catching).
+    `lenient=True` (AI generation) instead drops unknown keys, drops wrong-typed
+    values, and truncates over-long strings. The result still goes through
+    `assert_no_unsafe_content` and lands only in a draft the owner reviews."""
     if schema.get("type") == "object" and not isinstance(content, dict):
         raise ValidationError(
             "Invalid section content",
@@ -55,8 +87,11 @@ def _validate_against_schema(content: dict[str, Any], schema: dict[str, Any], *,
                 details={"errors": [_field_error(f"{field}.{key}", "Required")]},
             )
     properties: dict[str, Any] = schema.get("properties") or {}
+    cleaned: dict[str, Any] = {}
     for key, value in content.items():
         if key not in properties:
+            if lenient:
+                continue
             raise ValidationError(
                 "Unknown section content field",
                 details={"errors": [_field_error(f"{field}.{key}", "Not allowed")]},
@@ -64,26 +99,37 @@ def _validate_against_schema(content: dict[str, Any], schema: dict[str, Any], *,
         prop = properties[key]
         if prop.get("type") == "string" and value is not None:
             if not isinstance(value, str):
+                if lenient:
+                    continue
                 raise ValidationError(
                     "Invalid section content field type",
                     details={"errors": [_field_error(f"{field}.{key}", "Must be a string")]},
                 )
             max_len = prop.get("maxLength")
             if max_len is not None and len(value) > int(max_len):
-                raise ValidationError(
-                    "Section content field too long",
-                    details={"errors": [_field_error(f"{field}.{key}", "Too long")]},
-                )
+                if lenient:
+                    value = value[: int(max_len)]
+                else:
+                    raise ValidationError(
+                        "Section content field too long",
+                        details={"errors": [_field_error(f"{field}.{key}", "Too long")]},
+                    )
         if prop.get("type") == "boolean" and value is not None and not isinstance(value, bool):
+            if lenient:
+                continue
             raise ValidationError(
                 "Invalid section content field type",
                 details={"errors": [_field_error(f"{field}.{key}", "Must be a boolean")]},
             )
         if prop.get("type") == "integer" and value is not None and not isinstance(value, int):
+            if lenient:
+                continue
             raise ValidationError(
                 "Invalid section content field type",
                 details={"errors": [_field_error(f"{field}.{key}", "Must be an integer")]},
             )
+        cleaned[key] = value
+    return cleaned
 
 
 def validate_section_content(
@@ -91,6 +137,7 @@ def validate_section_content(
     content: dict[str, Any],
     *,
     content_schema: dict[str, Any] | None = None,
+    lenient: bool = False,
 ) -> dict[str, Any]:
     if section_type_id not in ALLOWED_SECTION_TYPE_IDS and content_schema is None:
         raise ValidationError(
@@ -103,9 +150,9 @@ def validate_section_content(
             details={"errors": [_field_error("content", "Must be an object")]},
         )
     schema = content_schema or CORE_SECTION_SCHEMAS.get(section_type_id) or {"type": "object"}
-    _validate_against_schema(content, schema, field="content")
-    assert_no_unsafe_content(content)
-    return content
+    cleaned = _validate_against_schema(content, schema, field="content", lenient=lenient)
+    assert_no_unsafe_content(cleaned)
+    return cleaned if lenient else content
 
 
 def validate_generation_payload(raw: dict[str, Any]) -> dict[str, Any]:
@@ -126,13 +173,25 @@ def validate_generation_payload(raw: dict[str, Any]) -> dict[str, Any]:
         for key in ("slug", "title", "page_type", "sections"):
             if key not in page:
                 raise ValidationError(f"Page missing {key}")
+        page["page_type"] = _coerce_page_type(page.get("page_type"))
+        kept_sections: list[Any] = []
         for section in page["sections"]:
             if not isinstance(section, dict):
                 raise ValidationError("Invalid section in generation payload")
             section_type_id = str(section.get("section_type_id") or "")
             content = section.get("content") or {}
-            validate_section_content(section_type_id, content)
-            assert_no_unsafe_content(section)
+            try:
+                section["content"] = validate_section_content(
+                    section_type_id, content, lenient=True
+                )
+            except ValidationError:
+                # A section the AI got wrong (missing a required field, wrong
+                # type) is dropped rather than failing the whole draft. The
+                # deterministic fallback covers a genuinely empty result.
+                continue
+            assert_no_unsafe_content({k: v for k, v in section.items() if k != "content"})
+            kept_sections.append(section)
+        page["sections"] = kept_sections
     assert_no_unsafe_content(navigation)
     assert_no_unsafe_content(theme_hints)
     return {

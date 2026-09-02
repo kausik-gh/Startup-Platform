@@ -23,7 +23,7 @@ from platform_core.validation.website import validate_generation_payload
 from platform_core.website.ai_provider import get_ai_provider
 from platform_core.website.fallback_generator import build_deterministic_draft
 from platform_core.website.questionnaire import build_intake_brief, validate_intake
-from platform_core.website.section_registry import WEBSITE_GENERATION_SCHEMA
+from platform_core.website.section_registry import SECTION_CATALOGUE_PROMPT, WEBSITE_GENERATION_SCHEMA
 
 
 class WebsiteGenerationService:
@@ -130,15 +130,17 @@ class WebsiteGenerationService:
             )
         prompt = (
             f"Generate a structured multi-page business website draft for "
-            f"{context['display_name']} ({context.get('business_type') or 'business'}). "
-            "Write real, specific copy in the business's voice. Use only the "
-            "section types named in the schema. Do not invent navigation, cart, "
-            "checkout, or booking behaviour — only content."
+            f"{context['display_name']} ({context.get('business_type') or 'business'}).\n"
+            "Write real, specific, publishable copy in the business's own voice — "
+            "no lorem ipsum, no placeholders, no bracketed instructions. Produce 3-5 "
+            "pages. Every page needs at least a hero plus one or two more sections. "
+            "Do not invent navigation, cart, checkout, or booking behaviour — content only.\n\n"
+            f"{SECTION_CATALOGUE_PROMPT}"
         )
         if context.get("tagline"):
-            prompt += f" Tagline: {context['tagline']}."
+            prompt += f"\nTagline: {context['tagline']}."
         if context.get("description"):
-            prompt += f" About: {context['description']}."
+            prompt += f"\nAbout: {context['description']}."
         prompt += build_intake_brief(context, intake)
         last_error: Exception | None = None
         for attempt in range(3):
@@ -146,8 +148,10 @@ class WebsiteGenerationService:
                 raw = await provider.generate_structured(
                     prompt,
                     WEBSITE_GENERATION_SCHEMA,
-                    {"purpose": "website.generate"},
-                    timeout_seconds=30,
+                    {"purpose": "website.generate", "max_output_tokens": 16384},
+                    # A full multi-page site is a big generation; the flash
+                    # models routinely need 30-50s.
+                    timeout_seconds=75,
                 )
                 return validate_generation_payload(raw)
             except Exception as exc:  # noqa: BLE001 — retry then fallback
@@ -202,6 +206,16 @@ class WebsiteGenerationService:
         website = await WebsiteResolver.resolve_website(session, business_id=job.business_id)
         context = await WebsiteGenerationService._load_context(session, job.business_id)
         intake = job.intake if isinstance(job.intake, dict) else None
+        def _deterministic() -> dict[str, Any]:
+            return validate_generation_payload(
+                build_deterministic_draft(
+                    display_name=context["display_name"],
+                    business_type=context.get("business_type"),
+                    tagline=context.get("tagline"),
+                    description=context.get("description"),
+                )
+            )
+
         generated_by = "ai_generation"
         fallback_reason: str | None = None
         try:
@@ -209,16 +223,9 @@ class WebsiteGenerationService:
             job.ai_provider = "gemini"
             job.model_name = "structured"
         except Exception as exc:  # noqa: BLE001
-            payload = build_deterministic_draft(
-                display_name=context["display_name"],
-                business_type=context.get("business_type"),
-                tagline=context.get("tagline"),
-                description=context.get("description"),
-            )
-            payload = validate_generation_payload(payload)
+            payload = _deterministic()
             generated_by = "deterministic_fallback"
             fallback_reason = str(exc)
-            job.fallback_reason = fallback_reason
             job.ai_provider = None
             job.model_name = None
 
@@ -226,14 +233,34 @@ class WebsiteGenerationService:
         # Re-validate: the stitched asset id has not been through the schema
         # + content-safety pass that _try_ai / the fallback already applied.
         payload = validate_generation_payload(payload)
-        draft = await WebsiteService.replace_draft_from_generation(
-            session,
-            business_id=job.business_id,
-            website=website,
-            payload=payload,
-            generated_by=generated_by,
-            generation_job_id=job.id,
-        )
+
+        async def _write(p: dict[str, Any], source: str) -> Any:
+            return await WebsiteService.replace_draft_from_generation(
+                session,
+                business_id=job.business_id,
+                website=website,
+                payload=p,
+                generated_by=source,
+                generation_job_id=job.id,
+            )
+
+        if generated_by == "ai_generation":
+            try:
+                # Savepoint: a DB reject of the AI draft (an enum/CHECK the model
+                # drifted past) must not poison the session — roll back to here
+                # and write the deterministic draft instead.
+                async with session.begin_nested():
+                    draft = await _write(payload, generated_by)
+            except Exception as exc:  # noqa: BLE001
+                generated_by = "deterministic_fallback"
+                fallback_reason = f"AI draft rejected on write: {exc}"
+                job.ai_provider = None
+                job.model_name = None
+                draft = await _write(_deterministic(), generated_by)
+        else:
+            draft = await _write(payload, generated_by)
+
+        job.fallback_reason = fallback_reason
         job.result_version_id = draft.id
         job.completed_at = datetime.now(timezone.utc)
         job.status = "fallback_used" if generated_by == "deterministic_fallback" else "completed"
