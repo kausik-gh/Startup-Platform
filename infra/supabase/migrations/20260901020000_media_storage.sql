@@ -26,6 +26,12 @@ CREATE INDEX IF NOT EXISTS idx_media_assets_purpose
     ON media_assets(business_id, purpose) WHERE deleted_at IS NULL;
 
 -- ------------------------------------------------------------- 2. bucket cfg
+-- Ensure the bucket exists on a fresh project (it was created out-of-band on
+-- the original project). Idempotent — a no-op where it already exists.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('media', 'media', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Doc 12 §15.4: images only, static, 10MB. SVG stays out (XSS).
 UPDATE storage.buckets
 SET file_size_limit = 10485760,
