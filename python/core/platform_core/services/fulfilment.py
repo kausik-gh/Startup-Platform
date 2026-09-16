@@ -8,9 +8,10 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from platform_core.context_resolver import bind_public_context
 from platform_core.exceptions import ModuleNotActive, ResourceNotFound, ValidationError
 from platform_core.gates import assert_business_mutable
 from platform_core.models import (
@@ -101,25 +102,31 @@ class FulfilmentService:
     @staticmethod
     async def assert_module_active(session: AsyncSession, business_id: uuid.UUID) -> None:
         state = (
-            await session.execute(
-                select(BusinessModuleState).where(
-                    BusinessModuleState.business_id == business_id,
-                    BusinessModuleState.module_id == "fulfilment",
+            (
+                await session.execute(
+                    select(BusinessModuleState).where(
+                        BusinessModuleState.business_id == business_id,
+                        BusinessModuleState.module_id == "fulfilment",
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if state is None or state.activation_state not in ACTIVE_MODULE_STATES:
             raise ModuleNotActive("fulfilment")
 
     @staticmethod
-    async def ensure_settings(
-        session: AsyncSession, business_id: uuid.UUID
-    ) -> FulfilmentSettings:
+    async def ensure_settings(session: AsyncSession, business_id: uuid.UUID) -> FulfilmentSettings:
         settings = (
-            await session.execute(
-                select(FulfilmentSettings).where(FulfilmentSettings.business_id == business_id)
+            (
+                await session.execute(
+                    select(FulfilmentSettings).where(FulfilmentSettings.business_id == business_id)
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if settings is None:
             settings = FulfilmentSettings(business_id=business_id)
             session.add(settings)
@@ -266,7 +273,12 @@ class FulfilmentService:
         lat = address.get("lat") or address.get("latitude")
         lng = address.get("lng") or address.get("longitude")
         for zone in zones:
-            if zone.match_type == "city" and city and zone.city and zone.city.strip().lower() == city:
+            if (
+                zone.match_type == "city"
+                and city
+                and zone.city
+                and zone.city.strip().lower() == city
+            ):
                 return zone, Decimal(str(zone.charge_amount))
             if (
                 zone.match_type == "postal_prefix"
@@ -327,10 +339,10 @@ class FulfilmentService:
                 details={"mode": mode, "active_modes": modes},
             )
         existing = (
-            await session.execute(
-                select(FulfilmentJob).where(FulfilmentJob.order_id == order.id)
-            )
-        ).scalars().first()
+            (await session.execute(select(FulfilmentJob).where(FulfilmentJob.order_id == order.id)))
+            .scalars()
+            .first()
+        )
         if existing is not None:
             return existing
 
@@ -415,13 +427,17 @@ class FulfilmentService:
         session: AsyncSession, *, business_id: uuid.UUID, job_id: uuid.UUID
     ) -> FulfilmentJob:
         job = (
-            await session.execute(
-                select(FulfilmentJob).where(
-                    FulfilmentJob.business_id == business_id,
-                    FulfilmentJob.id == job_id,
+            (
+                await session.execute(
+                    select(FulfilmentJob).where(
+                        FulfilmentJob.business_id == business_id,
+                        FulfilmentJob.id == job_id,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if job is None:
             raise ResourceNotFound("FulfilmentJob")
         return job
@@ -431,13 +447,17 @@ class FulfilmentService:
         session: AsyncSession, *, business_id: uuid.UUID, order_id: uuid.UUID
     ) -> FulfilmentJob | None:
         return (
-            await session.execute(
-                select(FulfilmentJob).where(
-                    FulfilmentJob.business_id == business_id,
-                    FulfilmentJob.order_id == order_id,
+            (
+                await session.execute(
+                    select(FulfilmentJob).where(
+                        FulfilmentJob.business_id == business_id,
+                        FulfilmentJob.order_id == order_id,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
     @staticmethod
     async def transition_status(
@@ -557,16 +577,38 @@ class FulfilmentService:
         order_id: uuid.UUID,
         token: str | None = None,
     ) -> dict[str, Any]:
+        # Public endpoint: no identity, no business context bound yet, and
+        # the order/job tables' RLS policies are business-scoped. Resolve the
+        # owning Business via a narrow SECURITY DEFINER function (exposes
+        # only orders_orders.business_id for this one order id, nothing
+        # else) and bind it, mirroring bind_public_context's use elsewhere
+        # for guest-facing reads. This bind establishes tenant scope only —
+        # it is not an authorization decision. The tracking_token check
+        # below remains the sole authorization gate, unchanged.
+        business_id = (
+            await session.execute(
+                text("SELECT resolve_order_business_id(:order_id)"),
+                {"order_id": order_id},
+            )
+        ).scalar()
+        if business_id is None:
+            raise ResourceNotFound("Order tracking")
+        await bind_public_context(session, business_id)
+
         job = (
-            await session.execute(select(FulfilmentJob).where(FulfilmentJob.order_id == order_id))
-        ).scalars().first()
+            (await session.execute(select(FulfilmentJob).where(FulfilmentJob.order_id == order_id)))
+            .scalars()
+            .first()
+        )
         if job is None:
             raise ResourceNotFound("Order tracking")
         if token is None or not secrets.compare_digest(job.tracking_token, token):
             raise ResourceNotFound("Order tracking")
         order = (
-            await session.execute(select(SalesOrder).where(SalesOrder.id == order_id))
-        ).scalars().first()
+            (await session.execute(select(SalesOrder).where(SalesOrder.id == order_id)))
+            .scalars()
+            .first()
+        )
         if order is None:
             raise ResourceNotFound("Order tracking")
         if job.tracking_expires_at < datetime.now(timezone.utc):

@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from platform_core.context_resolver import bind_public_context
 from platform_core.exceptions import ResourceNotFound
 from platform_core.marketplace.eligibility import evaluate_eligibility
 from platform_core.marketplace.search_provider import get_search_provider
@@ -47,9 +48,17 @@ class MarketplaceSearchService:
 
         filtered_businesses: list[dict[str, Any]] = []
         for item in businesses:
-            eligibility = await evaluate_eligibility(
-                session, uuid.UUID(item["business_id"])
-            )
+            business_id = uuid.UUID(item["business_id"])
+            # evaluate_eligibility reads business_profiles/websites, whose RLS
+            # policies are business_id = current_business_id() only — unlike
+            # businesses/marketplace_business_projections, neither has a
+            # public/discoverable arm. This is a public, multi-candidate
+            # request (no single business to bind once up front, the way
+            # get_marketplace_profile does), so bind per-candidate before
+            # each check — same bind_public_context used everywhere else for
+            # guest-facing reads, not a policy change.
+            await bind_public_context(session, business_id)
+            eligibility = await evaluate_eligibility(session, business_id)
             if eligibility.eligible:
                 item["capability_flags"] = eligibility.capability_flags or item.get(
                     "capability_flags", {}
@@ -58,9 +67,9 @@ class MarketplaceSearchService:
 
         filtered_offerings: list[dict[str, Any]] = []
         for item in offerings:
-            eligibility = await evaluate_eligibility(
-                session, uuid.UUID(item["business_id"])
-            )
+            business_id = uuid.UUID(item["business_id"])
+            await bind_public_context(session, business_id)
+            eligibility = await evaluate_eligibility(session, business_id)
             if eligibility.eligible:
                 filtered_offerings.append(item)
 
@@ -92,38 +101,48 @@ class MarketplaceSearchService:
         }
 
     @staticmethod
-    async def get_marketplace_profile(
-        session: AsyncSession, *, slug: str
-    ) -> dict[str, Any]:
+    async def get_marketplace_profile(session: AsyncSession, *, slug: str) -> dict[str, Any]:
         # Lazy import avoids circular import via entitlements → business.
         from platform_core.services.business import BusinessService
 
         business = await BusinessService.get_by_slug(session, slug)
         if business is None:
             raise ResourceNotFound("Business")
+        await bind_public_context(session, business.id)
         eligibility = await evaluate_eligibility(session, business.id)
         if not eligibility.eligible:
             raise ResourceNotFound("Business")
 
         projection = (
-            await session.execute(
-                select(MarketplaceBusinessProjection).where(
-                    MarketplaceBusinessProjection.business_id == business.id,
-                    MarketplaceBusinessProjection.is_discoverable.is_(True),
+            (
+                await session.execute(
+                    select(MarketplaceBusinessProjection).where(
+                        MarketplaceBusinessProjection.business_id == business.id,
+                        MarketplaceBusinessProjection.is_discoverable.is_(True),
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if projection is None:
             raise ResourceNotFound("Business")
 
         offerings = (
-            await session.execute(
-                select(MarketplaceOfferingProjection).where(
-                    MarketplaceOfferingProjection.business_id == business.id,
-                    MarketplaceOfferingProjection.is_active.is_(True),
-                ).order_by(MarketplaceOfferingProjection.title.asc()).limit(50)
+            (
+                await session.execute(
+                    select(MarketplaceOfferingProjection)
+                    .where(
+                        MarketplaceOfferingProjection.business_id == business.id,
+                        MarketplaceOfferingProjection.is_active.is_(True),
+                    )
+                    .order_by(MarketplaceOfferingProjection.title.asc())
+                    .limit(50)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         flags = eligibility.capability_flags or {}
         actions: list[dict[str, str]] = []

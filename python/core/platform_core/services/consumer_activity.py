@@ -10,10 +10,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from platform_core.models import Business, ConsumerActivityProjection, CustomerContact
+from platform_core.models import ConsumerActivityProjection, CustomerContact
 
 
 class ConsumerActivityService:
@@ -32,15 +32,19 @@ class ConsumerActivityService:
         if identity_id is None:
             return None
         existing = (
-            await session.execute(
-                select(ConsumerActivityProjection).where(
-                    ConsumerActivityProjection.identity_id == identity_id,
-                    ConsumerActivityProjection.resource_type == resource_type,
-                    ConsumerActivityProjection.resource_id == resource_id,
-                    ConsumerActivityProjection.activity_type == activity_type,
+            (
+                await session.execute(
+                    select(ConsumerActivityProjection).where(
+                        ConsumerActivityProjection.identity_id == identity_id,
+                        ConsumerActivityProjection.resource_type == resource_type,
+                        ConsumerActivityProjection.resource_id == resource_id,
+                        ConsumerActivityProjection.activity_type == activity_type,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if existing is not None:
             existing.summary = summary or {}
             existing.occurred_at = occurred_at or datetime.now(timezone.utc)
@@ -73,13 +77,17 @@ class ConsumerActivityService:
         if customer_contact_id is None:
             return None
         contact = (
-            await session.execute(
-                select(CustomerContact).where(
-                    CustomerContact.id == customer_contact_id,
-                    CustomerContact.business_id == business_id,
+            (
+                await session.execute(
+                    select(CustomerContact).where(
+                        CustomerContact.id == customer_contact_id,
+                        CustomerContact.business_id == business_id,
+                    )
                 )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if contact is None or contact.identity_id is None:
             return None
         return await ConsumerActivityService.record(
@@ -119,25 +127,43 @@ class ConsumerActivityService:
         """My Activity feed for one consumer (Doc 09 ACC-011, Doc 11 §17.7).
 
         Scoped strictly to the calling identity. Business display names are
-        joined in so the consumer surface can name who each activity was with
-        without granting any Business-scoped read.
+        attached via a narrow SECURITY DEFINER lookup (resolve_activity_
+        business_names) so the consumer surface can name who each activity
+        was with, without granting any Business-scoped read.
+
+        This deliberately does NOT join businesses in the projection query:
+        consumer_activity_projections' own RLS policy lets the caller read
+        their own activity rows (identity_id = current_identity_id())
+        regardless of whether they hold a Business membership, but a JOIN
+        against businesses runs every row through businesses_api_select too
+        — which a consumer (no membership) never satisfies — silently
+        dropping rows the caller is otherwise fully entitled to see.
 
         Only Bookings feed this projection today (BookingService and
         BookingLifecycleService are its only writers), and only for a
         CustomerContact carrying an identity_id — a guest booking writes
         nothing, pending FL-DEC-024 guest-to-authenticated linking.
         """
-        stmt = (
-            select(ConsumerActivityProjection, Business.display_name)
-            .join(Business, Business.id == ConsumerActivityProjection.business_id)
-            .where(ConsumerActivityProjection.identity_id == identity_id)
+        stmt = select(ConsumerActivityProjection).where(
+            ConsumerActivityProjection.identity_id == identity_id
         )
         if resource_type is not None:
             stmt = stmt.where(ConsumerActivityProjection.resource_type == resource_type)
         if business_id is not None:
             stmt = stmt.where(ConsumerActivityProjection.business_id == business_id)
         stmt = stmt.order_by(ConsumerActivityProjection.occurred_at.desc()).limit(limit)
-        rows = (await session.execute(stmt)).all()
+        rows = (await session.execute(stmt)).scalars().all()
+
+        distinct_business_ids = list({row.business_id for row in rows})
+        names: dict[uuid.UUID, str] = {}
+        if distinct_business_ids:
+            resolved = await session.execute(
+                text("SELECT id, display_name FROM resolve_activity_business_names(:ids)"),
+                {"ids": distinct_business_ids},
+            )
+            names = {r.id: r.display_name for r in resolved}
+
         return [
-            ConsumerActivityService.serialize(row, business_name=name) for row, name in rows
+            ConsumerActivityService.serialize(row, business_name=names.get(row.business_id))
+            for row in rows
         ]

@@ -21,7 +21,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, cast
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from platform_core.authorization.resolver import EffectivePermissionResolver
@@ -57,9 +57,7 @@ class NotificationService:
             "location_id": str(notification.location_id) if notification.location_id else None,
             "payload": notification.payload,
             "read_at": notification.read_at.isoformat() if notification.read_at else None,
-            "created_at": notification.created_at.isoformat()
-            if notification.created_at
-            else None,
+            "created_at": notification.created_at.isoformat() if notification.created_at else None,
             "version": notification.version,
         }
 
@@ -133,16 +131,34 @@ class NotificationService:
         category: str,
         identity_ids: list[uuid.UUID],
     ) -> set[uuid.UUID]:
+        """Which of `identity_ids` muted `category` for this business.
+
+        Deliberately NOT a plain SELECT on PlatformNotificationPreference:
+        notification_prefs_api_write is `identity_id = current_identity_id()
+        AND business_id = current_business_id()` (correctly keeping one
+        member's preferences private from every other member for the
+        general case), so a direct query here could only ever see the
+        CURRENT ACTOR's own row — never the row of the recipient being
+        checked, who is essentially always someone else. Fan-out would look
+        like it worked (no error, no empty-policy failure) while silently
+        never suppressing anything. resolve_muted_identities is a narrow
+        SECURITY DEFINER resolver for exactly this internal check; it does
+        not widen notification_prefs_api_write or expose preference rows on
+        any route (see its migration comment,
+        20260915010000_stage7_notification_mute_resolver.sql).
+        """
         if not identity_ids:
             return set()
         result = await session.execute(
-            select(PlatformNotificationPreference.identity_id).where(
-                PlatformNotificationPreference.business_id == business_id,
-                PlatformNotificationPreference.category == category,
-                PlatformNotificationPreference.identity_id.in_(identity_ids),
-                PlatformNotificationPreference.in_app_enabled.is_(False),
-                PlatformNotificationPreference.deleted_at.is_(None),
-            )
+            text(
+                "SELECT identity_id FROM resolve_muted_identities("
+                ":business_id, :category, :identity_ids)"
+            ),
+            {
+                "business_id": business_id,
+                "category": category,
+                "identity_ids": identity_ids,
+            },
         )
         return {row[0] for row in result.all()}
 
@@ -170,7 +186,24 @@ class NotificationService:
             raise ValidationError(f"Unsupported notification category '{category}'")
         if severity not in SEVERITIES:
             raise ValidationError(f"Unsupported notification severity '{severity}'")
+
+        # Deliberately NOT session.add()+flush(): Postgres filters an
+        # INSERT ... RETURNING through the table's SELECT policy, not just
+        # WITH CHECK, and the ORM's implicit flush always issues RETURNING to
+        # populate server-generated columns. notifications_api_select requires
+        # recipient_identity_id = current_identity_id() — true for a
+        # self-notification, false for every fan-out recipient other than the
+        # acting identity, which is the normal case (inviting someone else,
+        # notifying an assignee, etc.). That RETURNING then comes back empty
+        # and SQLAlchemy raises, even though the row was written correctly
+        # (WITH CHECK only constrains business_id, not recipient). Setting
+        # every server-generated column in Python and inserting via Core with
+        # no .returning() sidesteps the RETURNING-vs-SELECT-policy conflict
+        # entirely, without touching notifications_api_select or any other
+        # RLS policy. Do not "simplify" this back to session.add()+flush().
+        now = datetime.now(timezone.utc)
         notification = PlatformNotification(
+            id=uuid.uuid4(),
             business_id=business_id,
             recipient_identity_id=recipient_identity_id,
             notification_type=notification_type,
@@ -183,9 +216,30 @@ class NotificationService:
             location_id=location_id,
             payload=payload or {},
             correlation_id=correlation_id,
+            created_at=now,
+            updated_at=now,
+            version=1,
         )
-        session.add(notification)
-        await session.flush()
+        await session.execute(
+            insert(PlatformNotification.__table__).values(
+                id=notification.id,
+                business_id=notification.business_id,
+                recipient_identity_id=notification.recipient_identity_id,
+                notification_type=notification.notification_type,
+                category=notification.category,
+                severity=notification.severity,
+                title=notification.title,
+                body=notification.body,
+                resource_type=notification.resource_type,
+                resource_id=notification.resource_id,
+                location_id=notification.location_id,
+                payload=notification.payload,
+                correlation_id=notification.correlation_id,
+                created_at=notification.created_at,
+                updated_at=notification.updated_at,
+                version=notification.version,
+            )
+        )
         return notification
 
     @staticmethod

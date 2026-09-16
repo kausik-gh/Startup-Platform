@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from platform_core.context_resolver import bind_session_context
 from platform_core.exceptions import (
     ConflictError,
     ResourceNotFound,
@@ -295,9 +296,7 @@ class InvitationService:
         correlation_id: str,
     ) -> BusinessInvitation:
         assert_business_mutable(business.state, action="resend_invitation")
-        locked = await InvitationService.get_by_id_for_update(
-            session, business.id, invitation.id
-        )
+        locked = await InvitationService.get_by_id_for_update(session, business.id, invitation.id)
         if locked is None:
             raise ResourceNotFound("Invitation")
         invitation = locked
@@ -345,9 +344,7 @@ class InvitationService:
         correlation_id: str,
     ) -> BusinessInvitation:
         assert_business_mutable(business.state, action="revoke_invitation")
-        locked = await InvitationService.get_by_id_for_update(
-            session, business.id, invitation.id
-        )
+        locked = await InvitationService.get_by_id_for_update(session, business.id, invitation.id)
         if locked is None:
             raise ResourceNotFound("Invitation")
         invitation = locked
@@ -373,7 +370,9 @@ class InvitationService:
         return invitation
 
     @staticmethod
-    def _assert_recipient(invitation: BusinessInvitation, identity_id: uuid.UUID, email: str) -> None:
+    def _assert_recipient(
+        invitation: BusinessInvitation, identity_id: uuid.UUID, email: str
+    ) -> None:
         normalized = email.strip().lower()
         if invitation.invited_identity_id is not None:
             if invitation.invited_identity_id != identity_id:
@@ -391,6 +390,22 @@ class InvitationService:
         accepter_email: str,
         correlation_id: str,
     ) -> tuple[BusinessInvitation, BusinessMembership]:
+        # RLS (AUD-02): the request was resolved with force_personal=True (no
+        # membership existed yet, so gate [4] legitimately doesn't apply), so
+        # app.current_business_id is still unset at this point. Bind it from
+        # the supplied (path) business_id BEFORE the Business lookup below —
+        # otherwise businesses_api_select has no arm covering "identity with
+        # a pending invitation, not yet a member" and the lookup 404s.
+        #
+        # This bind is tenant-scope plumbing only, not an authorization
+        # decision — it does not grant this identity anything. The Business
+        # lookup, assert_business_mutable, the invitation lookup, and
+        # especially _assert_recipient below remain the actual authorization
+        # checks: an identity that binds this business_id but turns out not
+        # to be the invitation's recipient is still rejected by
+        # _assert_recipient, same as before this change.
+        await bind_session_context(session, accepter_identity_id, business_id)
+
         business = await BusinessService.get_by_id(session, business_id)
         if not business:
             raise ResourceNotFound("Business")
@@ -458,6 +473,12 @@ class InvitationService:
         decliner_email: str,
         correlation_id: str,
     ) -> BusinessInvitation:
+        # RLS (AUD-02): same reasoning as accept_invitation — the request was
+        # resolved with force_personal=True (no membership yet), so
+        # app.current_business_id is unset. Bind it from the verified path
+        # business_id before any business-scoped read/write.
+        await bind_session_context(session, decliner_identity_id, business_id)
+
         locked = await InvitationService.get_by_id_for_update(session, business_id, invitation_id)
         if locked is None:
             raise ResourceNotFound("Invitation")
