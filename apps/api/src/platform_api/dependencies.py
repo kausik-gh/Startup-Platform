@@ -59,11 +59,15 @@ async def resolve_business_actor(
 ) -> BusinessActorContext:
     """Resolve active membership and permission against a path business_id.
 
-    Runs the Doc 12 SS8.9 gate chain in canonical order: [3] Business exists ->
-    [4] membership active -> [6] Entitlement -> [7] module state -> [8] permission.
-    `module_id` is supplied only for genuine optional modules; Platform Core
-    groups are auto-granted and auto-activated at Business creation and are
-    deliberately outside the optional-module Entitlement/activation path.
+    Runs the Doc 12 SS8.9 gates in order [4] membership active -> [3] Business
+    exists -> [6] Entitlement -> [7] module state -> [8] permission. [4] before
+    [3]: business_memberships' RLS policy does not depend on the Business
+    being visible, so checking membership first lets a non-member get 403
+    MEMBERSHIP_REQUIRED instead of businesses_api_select hiding the row and
+    forcing a 404 (Category A scenarios 1/3). `module_id` is supplied only for
+    genuine optional modules; Platform Core groups are auto-granted and
+    auto-activated at Business creation and are deliberately outside the
+    optional-module Entitlement/activation path.
     """
     from platform_core.authorization.resolver import AuthorizationService
     from platform_core.context_resolver import bind_session_context
@@ -86,24 +90,35 @@ async def resolve_business_actor(
             assert_module_operational(ctx, module_id)
         if permission not in ctx.effective_permissions:
             raise PermissionDenied(permission)
-        return BusinessActorContext(
-            request=ctx, business=business, actor_membership=membership
-        )
+        return BusinessActorContext(request=ctx, business=business, actor_membership=membership)
 
-    business = await BusinessService.get_by_id(session, business_id)
-    if not business:
-        raise ResourceNotFound("Business")
+    # Gate [4] before gate [3]: business_memberships' RLS policy has an
+    # `identity_id = current_identity_id()` arm that does not depend on the
+    # Business being visible, so this membership check works regardless of
+    # `businesses` RLS. Checking it first lets a non-member (Category A
+    # scenarios 1/3: no relationship, or suspended/removed) get the correct
+    # 403 MEMBERSHIP_REQUIRED instead of `businesses_api_select` silently
+    # hiding the row and forcing a 404 before the app ever gets to decide.
     membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
     if membership is None:
         raise MembershipRequired()
 
     # RLS (AUD-02): the request context's GUC was bound from the X-Business-Id
     # header, which most callers don't send — they carry the business in the
-    # path. Now that gates [3] and [4] have confirmed this identity is an active
-    # member, bind `app.current_business_id` from the verified path value so the
+    # path. Now that gate [4] has confirmed this identity is an active member,
+    # bind `app.current_business_id` from the verified path value so the
     # handler's tenant-scoped queries resolve. Binding earlier, from the
     # unverified path param, would let a non-member read the row.
     await bind_session_context(session, ctx.identity_id, business_id)
+
+    # Gate [3]: now that membership is confirmed and the tenant scope is
+    # bound, `businesses_api_select`'s active-membership arm makes this row
+    # visible. The ResourceNotFound check is kept as a defensive fallback
+    # (e.g. a membership row surviving a deleted Business), not the primary
+    # existence check anymore.
+    business = await BusinessService.get_by_id(session, business_id)
+    if not business:
+        raise ResourceNotFound("Business")
 
     if module_id is not None:
         assert_entitled(ctx, module_id)
@@ -137,7 +152,7 @@ async def resolve_business_member(
     ctx: RequestContext,
     session: AsyncSession,
 ) -> BusinessActorContext:
-    """Gate chain [3] Business exists -> [4] membership active, and STOP.
+    """Gate chain [4] membership active -> [3] Business exists, and STOP.
 
     Deliberately omits gate [8] permission. Use ONLY for endpoints whose entire
     result set is the calling identity's own personal data, where the identity
@@ -166,14 +181,15 @@ async def resolve_business_member(
             request=ctx, business=ctx.orm_business, actor_membership=ctx.orm_membership
         )
 
-    business = await BusinessService.get_by_id(session, business_id)
-    if not business:
-        raise ResourceNotFound("Business")
+    # Gate [4] before gate [3] — see resolve_business_actor for why.
     membership = await TeamService.get_active_membership(session, ctx.identity_id, business_id)
     if membership is None:
         raise MembershipRequired()
     # RLS: bind the verified business scope from the path (see resolve_business_actor).
     await bind_session_context(session, ctx.identity_id, business_id)
+    business = await BusinessService.get_by_id(session, business_id)
+    if not business:
+        raise ResourceNotFound("Business")
     return BusinessActorContext(request=ctx, business=business, actor_membership=membership)
 
 

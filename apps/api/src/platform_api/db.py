@@ -45,14 +45,33 @@ async def _reset_and_close(session: AsyncSession) -> None:
 
 
 async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    # db_session_factory is stored in app.state during lifespan
-    session_factory = getattr(request.app.state, "db_session_factory", None)
-    if session_factory is not None:
-        async with session_factory() as session:
-            try:
-                yield session
-            finally:
-                await _reset_and_close(session)
+    """Yield one AsyncSession bound to one Connection for the whole request.
+
+    AUD-02 follow-up: `bind_session_context` sets the RLS GUCs at SESSION
+    scope specifically so they survive an in-request `commit()` (see its
+    docstring). That guarantee only holds if the *physical* connection stays
+    the same across the request. A Session bound to an Engine (rather than a
+    Connection) does not guarantee that: SQLAlchemy checks the connection
+    back into the pool at every commit() and checks a new one out for the
+    next statement, and a real pool can legitimately hand back a *different*
+    connection — one with no GUCs set, or (before the reset below runs) a
+    stale tenant's. A handler that writes, commits, and immediately reads
+    back what it wrote (e.g. create_employee's post-commit get_by_id,
+    create_order's post-commit line-item load) would then see its own read
+    filtered out by RLS even though the write is already durably committed.
+    Holding one Connection open for the request's lifetime — checked out
+    once here, released once when this generator's `finally` runs — removes
+    that swap entirely, regardless of which pool class backs the engine.
+    """
+    # db_engine is stored in app.state during lifespan
+    engine = getattr(request.app.state, "db_engine", None)
+    if engine is not None:
+        async with engine.connect() as conn:
+            async with AsyncSession(bind=conn, expire_on_commit=False) as session:
+                try:
+                    yield session
+                finally:
+                    await _reset_and_close(session)
         return
 
     # Fallback: lifespan never ran (e.g. TestClient(app) instantiated without
@@ -64,6 +83,13 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
     #
     # Uses API_DATABASE_URL (the RLS-enforcing role) when set, so the test
     # suite actually exercises the policies rather than the bypass path.
+    #
+    # Same single-Connection binding as the primary path above, and for the
+    # same reason — NullPool makes it *worse* than a real pool, since every
+    # post-commit checkout is guaranteed to be a brand-new physical
+    # connection with no GUCs at all, so an Engine-bound session here would
+    # fail every read-after-write-in-one-request deterministically rather
+    # than intermittently.
     db_url = os.getenv("API_DATABASE_URL") or os.getenv("DATABASE_URL")
     if not db_url:
         raise RuntimeError("Database session factory is not initialized")
@@ -73,13 +99,9 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
 
     engine = create_async_engine(db_url, echo=False, poolclass=NullPool)
     try:
-        factory = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-        )
-        async with factory() as session:
-            yield session
+        async with engine.connect() as conn:
+            async with AsyncSession(bind=conn, expire_on_commit=False) as session:
+                yield session
     finally:
         await engine.dispose()
 

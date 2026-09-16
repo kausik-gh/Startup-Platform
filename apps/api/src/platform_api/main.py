@@ -10,7 +10,41 @@ from platform_core.logging import configure as configure_logging, get_logger
 from platform_api.errors import platform_error_handler
 from platform_api.observability import RequestLogMiddleware
 from platform_api.rate_limit import RateLimitMiddleware
-from platform_api.routers import me, v1_me, v1_businesses, v1_business, v1_team_modules, v1_admin, v1_platform_members, v1_platform_invitations, v1_platform_settings, v1_platform_configuration, v1_platform_entitlements, v1_platform_permissions, v1_platform_locations, v1_platform_employees, v1_platform_customers, v1_platform_offerings, v1_platform_inventory, v1_platform_orders, v1_platform_bookings, v1_platform_payments, webhooks_payments, v1_website, v1_public_websites, v1_public_search, v1_marketplace, v1_fulfilment, v1_public_checkout, v1_workforce, v1_public_bookings, v1_platform_leads, v1_platform_memberships, v1_platform_notifications, v1_media
+from platform_api.routers import (
+    me,
+    v1_me,
+    v1_businesses,
+    v1_business,
+    v1_team_modules,
+    v1_admin,
+    v1_platform_members,
+    v1_platform_invitations,
+    v1_platform_settings,
+    v1_platform_configuration,
+    v1_platform_entitlements,
+    v1_platform_permissions,
+    v1_platform_locations,
+    v1_platform_employees,
+    v1_platform_customers,
+    v1_platform_offerings,
+    v1_platform_inventory,
+    v1_platform_orders,
+    v1_platform_bookings,
+    v1_platform_payments,
+    webhooks_payments,
+    v1_website,
+    v1_public_websites,
+    v1_public_search,
+    v1_marketplace,
+    v1_fulfilment,
+    v1_public_checkout,
+    v1_workforce,
+    v1_public_bookings,
+    v1_platform_leads,
+    v1_platform_memberships,
+    v1_platform_notifications,
+    v1_media,
+)
 
 # Database lifecycle state
 db_engine = None
@@ -24,7 +58,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
     # AUD-11: structlog must be configured (redaction processor installed)
     # before the first line ships.
     configure_logging()
-    get_logger("platform_api").info("api.startup", rate_limit=os.getenv("RATE_LIMIT_ENABLED", "1") != "0")
+    get_logger("platform_api").info(
+        "api.startup", rate_limit=os.getenv("RATE_LIMIT_ENABLED", "1") != "0"
+    )
 
     # Warm the Supabase JWKS cache so the first authenticated request doesn't
     # pay the fetch. Best-effort; the ES256 verify path retries on miss.
@@ -45,15 +81,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[Any]:
             db_session_factory = None
 
     app.state.db_session_factory = db_session_factory
+    # AUD-02 follow-up: get_db_session binds one Connection per request off
+    # this engine directly (rather than handing out Engine-bound Sessions),
+    # so an in-request commit() can't silently swap the physical connection
+    # under the session and strip the RLS GUCs bind_session_context set. See
+    # the comment on get_db_session for the full mechanism. db_session_factory
+    # stays published too — /health/ready and /health/worker only ever run one
+    # transaction per call, so the swap risk doesn't apply to them.
+    app.state.db_engine = db_engine
 
     yield
 
-    # Clear the advertised factory before disposing its engine. Leaving a
-    # disposed engine on app.state makes get_db_session hand out sessions bound
-    # to a closed event loop and suppresses its NullPool fallback — which breaks
+    # Clear the advertised factory/engine before disposing. Leaving a disposed
+    # engine on app.state makes get_db_session hand out sessions bound to a
+    # closed event loop and suppresses its NullPool fallback — which breaks
     # every later bare-TestClient(app) test in the same process once any
     # `with TestClient(app)` test has run lifespan.
     app.state.db_session_factory = None
+    app.state.db_engine = None
     if db_engine:
         await db_engine.dispose()
     db_engine = None

@@ -222,10 +222,20 @@ async def resolve_request_context(
     if active_context == OperatingContext.BUSINESS:
         if business_id is None:
             raise MembershipRequired()
-        business = await BusinessService.get_by_id(session, business_id)
-        if not business:
+
+        # Gate [4] before gate [3]: business_memberships' RLS policy has an
+        # `identity_id = current_identity_id()` arm that does not depend on
+        # the Business being visible, so this membership check works
+        # regardless of `businesses` RLS. Checking it first lets a non-member
+        # (Category A scenarios 1/3: no relationship, or suspended/removed)
+        # get the correct MembershipRequired decision instead of
+        # businesses_api_select silently hiding the row and forcing a
+        # not-found outcome before the app ever gets to decide.
+        membership = await TeamService.get_membership(session, identity.id, business_id)
+        if membership is None or membership.status != "active":
             if path_business or explicit_business_header:
-                raise ResourceNotFound("Business")
+                raise MembershipRequired()
+            # Restored preference no longer valid → no business context.
             await bind_session_context(session, identity.id, None)
             return _empty_personal_context(
                 identity=identity,
@@ -236,11 +246,24 @@ async def resolve_request_context(
                 request=request,
             )
 
-        membership = await TeamService.get_membership(session, identity.id, business_id)
-        if membership is None or membership.status != "active":
+        # RLS (AUD-02): bind the business GUC now that membership is confirmed
+        # active, before reading the Business row (or module state /
+        # permissions / entitlements) — those tables are business-scoped
+        # policies keyed on current_business_id(), so binding after reading
+        # them left those reads running under the still-unset (no business)
+        # GUC. `businesses_api_select`'s active-membership EXISTS arm does not
+        # itself require this bind, but the reads below do.
+        await bind_session_context(session, identity.id, business_id)
+        bind_request_context(business_id=str(business_id))
+
+        # Gate [3]: now that membership is confirmed and the tenant scope is
+        # bound, the Business row is visible. This ResourceNotFound branch is
+        # a defensive fallback (e.g. a membership row surviving a deleted
+        # Business), not the primary existence check anymore.
+        business = await BusinessService.get_by_id(session, business_id)
+        if not business:
             if path_business or explicit_business_header:
-                raise MembershipRequired()
-            # Restored preference no longer valid → no business context.
+                raise ResourceNotFound("Business")
             await bind_session_context(session, identity.id, None)
             return _empty_personal_context(
                 identity=identity,
@@ -285,8 +308,6 @@ async def resolve_request_context(
             )
             for mid, s in raw_states.items()
         }
-        await bind_session_context(session, identity.id, business_id)
-        bind_request_context(business_id=str(business_id))
     else:
         await bind_session_context(session, identity.id, None)
 
