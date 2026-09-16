@@ -1,6 +1,30 @@
 # Product Experience Bible
 *The single source of truth for every designer, writer, motion designer, and product maker on this team.*
 
+> ### ⚠ Reader notice — historical foundation document (added 2026-09-12)
+>
+> This document has **not been amended since July 2026**. Parts of it have since
+> been superseded by approved decisions in Documents 05–12. The text below is
+> deliberately left unchanged — this notice is **navigational, not an amendment**,
+> and adds no new decision.
+>
+> **Before implementing anything from this document**, check the governing
+> registers: **Document 09 §19**, **Document 10 §36**, **Document 11 §27**, and
+> **Document 12 §0.1**. Where they conflict, **Document 12 governs**.
+>
+> Known-superseded content in this document:
+>
+> | Content here | Governing position |
+> |---|---|
+> | "The single source of truth" for product makers | Still governing for **how the platform should feel**. The canonical *page and surface inventory* is **Document 09**; launch scope is **Document 11**. |
+> | Trust Score references | `svc-statistics-trust`, a shared service — `D10-CONFLICT-006` |
+>
+> This document's emotional architecture, clarity, progressive-complexity, and
+> access-state language principles are **current and governing**. It is the least
+> superseded of Documents 01–04.
+
+---
+
 ---
 
 ## Preface — The Governing Question

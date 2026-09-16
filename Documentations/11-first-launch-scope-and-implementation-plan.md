@@ -2,10 +2,10 @@
 
 **Document:** 11  
 **Document Status:** Canonical launch-scope and implementation-planning specification  
-**Version:** 1.1  
-**Date:** July 2026 (Version 1.1 amendment: September 1, 2026)  
+**Version:** 1.2  
+**Date:** July 2026 (Version 1.1 amendment: September 1, 2026; Version 1.2 amendment: September 12, 2026)  
 **Authority:** Governing definition of the platform's First Launch Version, launch capability depth, deliberate deferrals, implementation sequence, and launch-readiness gates  
-**Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md` · `09-complete-page-by-page-product-experience.md` · `10-data-and-technical-architecture.md` Version 1.1  
+**Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md` · `09-complete-page-by-page-product-experience.md` · `10-data-and-technical-architecture.md` Version 1.2  
 **Terminology:** **First Launch Version** is the governing term. “MVP” appears only when referencing older documents whose relevance labels or decisions use that term.
 
 ---
@@ -18,6 +18,7 @@
 |---|---|---|
 | 1.0 | July 2026 | Initial canonical First Launch scope, module-depth classification, reference-workflow validation, and dependency-aware implementation plan. |
 | 1.1 | September 1, 2026 | Additive amendment (Website Generation Overhaul work order), recorded per Document 08 §25.3 — decisions made now. §6.2 gains the AI content-authorship boundary, the one-shot questionnaire-driven generation model, and the design-reference-translation rule for prebuilt templates; §13.2 cross-references them. `FL-DEC-015` remains open (temporary founder-authorized Gemini key in place). No First Launch scope, module-depth, or sequencing change. |
+| 1.2 | September 12, 2026 | Additive **decision-status** pass (documentation review), recorded per Document 08 §25.3. §26 gains a status block recording that `FL-DEC-010`–`FL-DEC-014` and `FL-DEC-019` were closed by Document 12 §0.2 and are implemented, and that `FL-DEC-003`, `FL-DEC-006`, `FL-DEC-015`, and `FL-DEC-016` remain formally open while implementation has already committed to a direction. Document 10 dependency pins corrected from Version 1.1 to Version 1.2. No First Launch scope, module-depth, sequencing, or gate change. |
 
 ## 0.2 Governance Order
 
@@ -26,7 +27,7 @@ This document applies the following authority:
 1. Approved decisions in later canonical documents supersede conflicting older assumptions.
 2. Document 08 governs the canonical distinction between Platform Core, optional Business modules, AI employee modules, and shared services.
 3. Document 09 governs page families, experience surfaces, interaction states, and page-by-page behavior.
-4. Document 10 Version 1.1 governs data and technical architecture, module communication, tenant isolation, webhook durability, provider boundaries, and implementation-readiness categories.
+4. Document 10 Version 1.2 governs data and technical architecture, module communication, tenant isolation, webhook durability, provider boundaries, and implementation-readiness categories.
 5. This document governs what is included in the actual **First Launch Version**, the depth at which it must work, what is deferred, and the order in which it should be implemented.
 6. Where Document 09 uses “MVP Essential,” “Conditional MVP,” “Post-MVP,” or similar relevance labels, this document's First Launch classification is the release-scope overlay. Document 09's page-family definitions remain canonical.
 7. This document completes the launch-module selection and release-sequencing inputs deferred by Document 09 and the scope decisions deferred by Document 10 §35. It does not amend those source documents; genuine supersessions are recorded in Section 27.
@@ -1454,7 +1455,7 @@ The stages are release-planning structures, not isolated waterfall silos. Workst
 
 ### Entry
 
-- Document 10 Version 1.1 accepted.
+- Document 10 Version 1.2 accepted.
 - Repository, database, auth, job mechanism, and permission-ID decisions assigned.
 
 ### Exit
@@ -2033,6 +2034,44 @@ No unresolved decision blocks unrelated canonical foundation work.
 | `FL-DEC-023` | Business-Type Profile versioning and migration behavior for existing Businesses | Feature/Data Blocker | Profile update tooling and production profile migration |
 | `FL-DEC-024` | Guest-to-authenticated identity linking implementation, preserving the approved verified-identifier-only rule | Product/Data Blocker | Cross-session guest history linking; guest checkout itself may proceed |
 | `FL-DEC-025` | Tax, fee, delivery-charge, and price-presentation policy for the launch geography | Product/Payment Production Blocker | Final checkout totals, receipts, and customer-facing price policy |
+
+> ### Amendment — 2026-09-12: decision status (additive, dated per Document 08 §25.3)
+>
+> **Status only. No scope, depth, sequencing, or gate change.** The two tables above are
+> retained as the original decision register; read them as history and this block as
+> current status.
+>
+> **§26.2 is stale — six of its ten decisions are closed.** Document 12 §0.2 resolved them
+> as engineering decisions, and all six are implemented in the repository. A reader who
+> stops at the table above will believe the foundation is still blocked:
+>
+> | ID | Status | Resolution |
+> |---|---|---|
+> | `FL-DEC-010` | **Closed** | Turborepo + pnpm workspaces — Document 12 §1. Implemented. |
+> | `FL-DEC-011` | **Closed** | Supabase (managed PostgreSQL + Supabase Auth) — Document 12 §6. Implemented, including dual-mode JWT verification (ES256 via JWKS, legacy HS256 for pre-migration tokens). |
+> | `FL-DEC-012` | **Closed** | PostgreSQL transactional outbox + a Python-native worker with safe row claiming, leases, retry/backoff, idempotency, and dead-letter handling — Document 12 §18. Implemented. |
+> | `FL-DEC-013` | **Closed** | Canonical permission identifier grammar `<resource>.<action>` — Document 12 §8. Implemented. |
+> | `FL-DEC-014` | **Closed** | PostgreSQL full-text search with GIN indexes — Document 12 §14. Implemented. |
+> | `FL-DEC-019` | **Closed** (delegation ceiling) | Managers may grant up to but not beyond their own effective permissions — Document 12 §8. Implemented. **Built-in template update/merge semantics remain open.** |
+>
+> Still open in §26.2: `FL-DEC-017`, `FL-DEC-018`, `FL-DEC-020`, `FL-DEC-022`–`FL-DEC-025`,
+> and the template-merge half of `FL-DEC-019`.
+>
+> **§26.1 — four decisions are formally open but already committed in implementation.**
+> This gap is recorded so it is visible now rather than discovered at a launch gate. None
+> of these is hereby closed; closing them is a founder act.
+>
+> | ID | Formal status | What implementation has already committed to | What still needs the founder |
+> |---|---|---|---|
+> | `FL-DEC-003` | **Open** | **Razorpay.** Each Business's own Key ID / Key Secret are entered by the owner, stored encrypted on `MerchantConnection`, and verified by a live provider call before the connection is marked active. The platform does not replicate Razorpay KYC. | KYC/settlement model; whether Razorpay is the launch commitment or one adapter among several; and confirmation that the platform-level `RAZORPAY_*` environment variables are for **platform billing only** and are never used for merchant collection. |
+> | `FL-DEC-006` | **Open** | A working `business_type_profiles` registry with development seeds and recommendation logic. | The **public** taxonomy and the recommendation seeds that actually ship. |
+> | `FL-DEC-015` | **Open** | **Gemini**, default model `gemini-3.6-flash`, exactly one structured call per Business, deterministic fallback on any failure. Proven end to end. See Document 12 §12.9. | Budget ceiling; formal fallback policy; and **rotation of the temporary founder-authorised API key before any public traffic** — treat this as a launch gate, not a cleanup task. |
+> | `FL-DEC-016` | **Open** | Supabase project region **Mumbai (`ap-south-1`)**, moved from `ap-northeast-1`. | Application hosting platform, production platform domain, and CDN configuration. |
+>
+> **Consequence for §22 (Launch Readiness) and §21 (Gates):** none of the above changes a
+> gate, but `FL-DEC-015`'s key rotation is now an explicit item under §21.1, and
+> `FL-DEC-003`'s settlement model remains the binding constraint on §21.2.
+
 
 ## 26.3 Explicitly Resolved by This Document
 

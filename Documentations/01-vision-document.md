@@ -1,6 +1,33 @@
 # The Infrastructure Layer for Local Businesses — Blueprint v3
 *Vision, Architecture, and Execution, separated on purpose*
 
+> ### ⚠ Reader notice — historical foundation document (added 2026-09-12)
+>
+> This document has **not been amended since July 2026**. Parts of it have since
+> been superseded by approved decisions in Documents 05–12. The text below is
+> deliberately left unchanged — this notice is **navigational, not an amendment**,
+> and adds no new decision.
+>
+> **Before implementing anything from this document**, check the governing
+> registers: **Document 09 §19**, **Document 10 §36**, **Document 11 §27**, and
+> **Document 12 §0.1**. Where they conflict, **Document 12 governs**.
+>
+> Known-superseded content in this document:
+>
+> | Content here | Governing position |
+> |---|---|
+> | Horizon 1 excludes meaningful Marketplace discovery | First Launch **includes** the search-first Marketplace loop — `D11-CONFLICT-001` |
+> | Horizon 1 excludes customer accounts beyond checkout identity | Shared Platform Identity + lightweight My Activity are **required** at First Launch — `D11-CONFLICT-002` |
+> | No-payment launch assumptions | `payments` is First Launch **Full** depth — `D11-CONFLICT-014` |
+> | Business type provisions required/default modules | Type and characteristics **recommend**; the Primary Owner chooses — `D11-CONFLICT-005` |
+> | Trust Score as a product surface | `svc-statistics-trust`, a shared service, not an installable module — `D10-CONFLICT-006` |
+>
+> The mission, kernel framing, "one identity, many renderings" principle, and the
+> infrastructure thesis remain **current and governing**. Only the horizon/scope
+> statements above were overtaken by Documents 09–11.
+
+---
+
 This is the third and final layer on top of v1 (narrow MVP scope) and v2 (module-first architecture). v3 doesn't replace either — it adds the pieces that turn "a good vertical SaaS platform" into "the infrastructure layer a category of company gets built on for decades." The discipline is the same as v2, turned up: **vision can be unlimited, architecture must be unlimited-ready, execution must stay brutally sequenced.** Read Section 12 (Build Order) as the real deliverable — everything before it exists to justify that section, not to argue for building it all now.
 
 ---

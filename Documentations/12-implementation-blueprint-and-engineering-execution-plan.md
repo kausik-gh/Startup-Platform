@@ -2,10 +2,10 @@
 
 **Document:** 12
 **Document Status:** Final Pre-Build Specification
-**Version:** 1.1
-**Date:** July 2026
+**Version:** 1.4
+**Date:** July 2026 (Version 1.2–1.3 amendments: September 1, 2026; Version 1.4 amendment: September 12, 2026)
 **Authority:** Final governing implementation authority for Documents 01–12. Converts the approved platform model into an exact engineering execution plan from which implementation begins.
-**Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md` · `09-complete-page-by-page-product-experience.md` · `10-data-and-technical-architecture.md` Version 1.1 · `11-first-launch-scope-and-implementation-plan.md`
+**Depends On:** `01-vision-document.md` · `02-product-experience-bible.md` · `03-business-kernel-specification.md` · `04-master-product-specification.md` · `05-user-context-journey-navigation-architecture-specification.md` · `06-role-permission-access-experience-matrix.md` · `07-business-type-configuration-profile-specification.md` · `08-plans-modules-entitlement-model.md` · `09-complete-page-by-page-product-experience.md` · `10-data-and-technical-architecture.md` Version 1.2 · `11-first-launch-scope-and-implementation-plan.md` Version 1.2
 
 **Document Control**
 
@@ -15,6 +15,7 @@
 | 1.1 | July 2026 | Controlled correction pass: replaces the Node-oriented pg-boss mismatch with a Python-native PostgreSQL worker built on the transactional outbox; standardizes IDs on UUIDv4; updates Next.js authentication to the current `@supabase/ssr` cookie and Proxy pattern; and records the intentional Document 10 backend supersession by FastAPI/Python. No product, module, launch-scope, application-boundary, stage, or vertical-slice change. |
 | 1.2 | September 1, 2026 | Additive amendment pass (Website Generation Overhaul & Workspace Cleanup work order). Records decisions made now, not retroactively: the AI content-authorship boundary (§12.6), the one-shot structured-intake generation model and its questionnaire (§12.7), and prebuilt-template ingestion as design-reference translation only — Option A (§12.8). Corrects two stale identifiers in §12.1–§12.2 to match the implemented `AIModelProvider.generate_structured` contract and the `platform_core/website/ai_provider.py` module path. No schema change; no change to the 13 seeded SectionTypes; no launch-scope change. `FL-DEC-015` (initial provider, budget, fallback policy) remains open — a temporary founder-authorized Gemini key is in place pending its formal closure. |
 | 1.3 | September 1, 2026 | Additive amendment (media & storage implementation). Records how §15 was actually built: one `media` bucket rather than the four in §15.1; the Stage 2 `media_assets` column names retained over §15.2's; signed upload URLs minted with the **caller's JWT**, never a service-role key; upload permission derived from a declared `purpose` mapped onto existing canonical permissions rather than a new `media.*` identifier; and resolved asset URLs returned beside `content`, never inside it. See §15.5. Storage RLS tightened (migration `20260901020000`) — the pre-existing `media` bucket allowed anonymous insert/update. |
+| 1.4 | September 12, 2026 | Additive amendment (documentation review). Records the live AI generation path as actually built — model, timeout, token ceiling, the section-catalogue prompt, the strict-envelope/lenient-content validation posture, persistence-failure fallback, and the `website_generation_jobs` drift from §12.4 — in a new §12.9, together with seven open defects against §§12.4–12.5. Corrects the §19.2 environment block. Adds §26, a stage-vocabulary errata reconciling the legacy "kernel stage" artifact naming with Document 11 §17. Corrects the stale **Version 1.1** header (the control table already ran to 1.3) and the Document 10 dependency pins. No schema change, no launch-scope change, no stage-definition change. |
 
 
 ---
@@ -27,9 +28,9 @@ Where documents conflict, the following governs:
 
 1. **Document 08** — canonical Platform Core, optional modules, module IDs, Entitlements, and module boundaries.
 2. **Document 09** — page-by-page product experience and product surfaces, except where Document 11 explicitly changes First Launch relevance.
-3. **Document 10 Version 1.1** — technical and data architecture, module communication, tenant isolation, webhook durability, and provider boundaries, except for implementation choices explicitly superseded by this document.
+3. **Document 10 Version 1.2** — technical and data architecture, module communication, tenant isolation, webhook durability, and provider boundaries, except for implementation choices explicitly superseded by this document.
 4. **Document 11** — First Launch scope, launch depth, reference business models, implementation stages, and release sequencing.
-5. **Document 12 Version 1.1** — final concrete implementation details and engineering execution authority. This document governs how systems are built and explicitly records any intentional supersession.
+5. **Document 12 Version 1.4** — final concrete implementation details and engineering execution authority. This document governs how systems are built and explicitly records any intentional supersession.
 
 ## 0.2 Resolved Engineering Decisions
 
@@ -1668,6 +1669,136 @@ Externally-sourced design references (e.g. a founder-supplied export) are transl
 - **Extraction target:** design decisions only — palette, type choices, spacing rhythm, section composition — expressed as (a) a new `theme` definition in `website_versions.theme` JSONB, and (b) new **layout variants** added to existing `SectionType.allowed_variants`.
 - **Boundary:** if an export contains something the current 13 `SectionType`s cannot represent, that is **flagged back for a decision**, not resolved by inventing an arbitrary new section type. New `SectionType`s remain a schema/architecture decision shown before applied (Document 10 §11.3 "Businesses may not define new section types" applies to the pipeline too).
 
+
+## 12.9 Live Generation Path — Implemented Parameters, Validation Posture, and Open Defects
+
+> **Amendment — 2026-09-12 (additive, dated per Document 08 §25.3). Records how the path
+> was actually built, following its first end-to-end run against a live model.**
+
+§§12.1–12.8 describe the governing model and remain correct in intent. This section records
+the implemented parameters and the three places where implemented behaviour differs from the
+earlier text, so that neither the document nor the code is read as the other.
+
+### 12.9.1 Implemented call parameters
+
+Sources: `platform_core/services/website_generation.py`, `platform_core/website/ai_provider.py`.
+
+| Parameter | Implemented value | Note |
+|---|---|---|
+| Model | **`gemini-3.6-flash`** | Default, overridable by `GEMINI_MODEL`. The previously assumed `gemini-2.0-flash` was retired by the provider and now returns 404. `gemini-flash-latest` is the non-retiring alias but has been 503-flaky under load, so a concrete pin plus the retry/fallback path is preferred. |
+| Timeout | **75 s** | **Supersedes the `timeout=30` shown in §12.7.** A full 3–5 page generation routinely needs 30–50 s; 30 s produced systematic timeouts that were indistinguishable from model failure. |
+| `max_output_tokens` | **16384** (set by the caller) | The provider's own default is 8192, which truncates a multi-page draft. |
+| `temperature` | 0.6 | Provider default. |
+| Attempts | 3, exponential backoff | Unchanged from §12.1. |
+| Structured output | `response_mime_type=application/json`, with the JSON Schema embedded in the prompt | The provider guarantees only *parseable* JSON. The hard guarantee remains the caller's `validate_generation_payload`. |
+
+### 12.9.2 The section catalogue is part of the prompt
+
+`WEBSITE_GENERATION_SCHEMA` describes only the envelope (`pages`, `navigation`,
+`theme_hints`), so a model given the schema alone invents section types and content
+fields. The prompt therefore carries `SECTION_CATALOGUE_PROMPT`: the 13 seeded
+`SectionType`s with their exact content fields and `allowed_variants`, the live-data rule,
+and the allowed `page_type` values.
+
+This is the prompt-side expression of §12.6 — the model is *told* the vocabulary rather
+than trusted to guess it, which is also the cheaper posture, because a drifted response
+costs a retry. Note the token consequence: the catalogue is a large, static block sent on
+every call. It belongs in the stable, cacheable portion of the prompt, and it must never be
+assembled per-Business from live data.
+
+**Any change to the catalogue is a prompt change and must bump
+`website_generation_jobs.prompt_version`.** This did not happen when the catalogue was
+introduced — see `D12-AI-002`.
+
+### 12.9.3 Validation posture — strict envelope, lenient content
+
+§12.1 step [5] reads "strict JSON Schema" and step [7] "on validation failure:
+deterministic template repair". The implemented posture is two-tier, because rejecting a
+whole draft over one drifted field discards an otherwise good site:
+
+| Path | Posture | Behaviour on drift |
+|---|---|---|
+| AI generation — `validate_generation_payload` → `validate_section_content(lenient=True)` | Strict envelope, **lenient per field** | Unknown keys dropped; wrong-typed values dropped; over-long strings truncated; `page_type` synonyms coerced by `_coerce_page_type` (e.g. `landing` → `home`). A section that loses a **required** field is dropped, not fatal. |
+| Manual owner edits — `validate_section_patch`, `validate_page_patch` | **Strict** | Rejected with a validation error. |
+
+**This does not widen §12.6.** Everything in §12.6's right-hand column remains
+unrepresentable: dropping an unknown key is precisely the mechanism by which a response
+reaching beyond content fails to be stored. The only correction is that repair happens at
+**field** granularity *before* falling back, rather than the entire draft falling back.
+
+Stated as a rule, so it is not re-litigated: **lenient applies only to the AI path, only to
+content within a known `SectionType`, and never to a manual edit.** Widening it further
+requires a recorded decision.
+
+### 12.9.4 Persistence failure is a third fallback trigger
+
+§12.1's failure handling covers provider timeout and failure only. A *validated* draft can
+still be rejected by the database — a CHECK or enum the model drifted past — and in
+SQLAlchemy that rejection poisons the worker's session, which kills retry and dead-letter
+handling for the job. The AI draft is therefore written inside a savepoint
+(`session.begin_nested()`); on any write failure the savepoint is rolled back and the
+deterministic draft is written instead, with
+`fallback_reason = "AI draft rejected on write: …"`.
+
+Fallback triggers are therefore:
+
+1. provider unavailable (no `GEMINI_API_KEY`) — fails fast, no retry delay;
+2. provider error, timeout, or unparseable output after 3 attempts;
+3. **a validated draft rejected on persistence.**
+
+All three end at `build_deterministic_draft`, which always produces a valid draft. The
+invariant from §12.1 holds unchanged: **AI failure never blocks Business creation.**
+
+### 12.9.5 `website_generation_jobs` — drift from the §12.4 DDL
+
+The live table carries three things the §12.4 DDL does not show:
+
+| Addition | Purpose | Source |
+|---|---|---|
+| `intake JSONB` | The owner's questionnaire answers, persisted on the job so the single `generate_structured` call can use them and a later "regenerate with more detail" can pre-fill | migration `20260901010000_website_generation_intake.sql` |
+| `status = 'superseded'` | An explicit questionnaire-driven generation replaces an auto-enqueued bootstrap job the worker has not yet claimed — the owner's answers must win over the bootstrap draft | same migration |
+| `triggered_by uuid` | Actor attribution for the audit record | Stage 2 |
+
+§12.4's DDL should be read as superseded by the migrations on these three points.
+
+### 12.9.6 Open defects in the live path
+
+These are recorded, not fixed. Each is a divergence from a rule this document already
+states, so none of them is a new requirement.
+
+| ID | Defect | Rule it violates | Severity |
+|---|---|---|---|
+| `D12-AI-001` | `job.model_name` is set to the literal string `"structured"` rather than the model actually used. **The model is therefore not recorded on any generation job**, so a bad generation cannot be attributed to a model version. | §12.5 — "logged with prompt version, provider, **model**, and outcome" | P1 |
+| `D12-AI-002` | `prompt_version` is hardcoded `"v1"` and was not bumped when `SECTION_CATALOGUE_PROMPT` was added. Generations are no longer attributable to the prompt that produced them. | §12.4's purpose for `prompt_version` | P1 |
+| `D12-AI-003` | No token, latency, or cost accounting is captured. AI spend is not attributable per Business or per generation, and there is no basis for the `FL-DEC-015` budget decision. | §12.5 governance intent; Document 10 §11.4 cost discipline | P1 — blocks `FL-DEC-015` |
+| `D12-AI-004` | The 5 requests/minute generation limit **is** implemented, but keyed by **client IP** (first hop of `X-Forwarded-For`), not by Business. Several Businesses behind one NAT share a bucket; one Business on two networks gets double. The endpoint itself is permission-gated (`website.edit` via `require_business_actor`), so this is **not** an anonymous-abuse path — the exposure is an authenticated actor burning provider spend past the documented ceiling, which `D12-AI-003` makes undetectable. | §12.5 — "5 requests/minute/**Business**" | P1 |
+
+> **Wider note on the same mechanism (not AI-specific).** `client_key()` trusts the first
+> hop of a caller-supplied `X-Forwarded-For` header unconditionally. For the
+> permission-gated buckets that is a fairness problem. For the **anonymous** buckets —
+> `public_write` (guest checkout, booking intake) and `public_read` (marketplace, search)
+> — it means the rate limit is **bypassable by any caller that sets the header**, unless a
+> trusted proxy is guaranteed in front of the API and strips or rewrites it. Either
+> guarantee that proxy and document it as a deployment requirement under §19/§20, or
+> derive the key from the socket peer with a configured trusted-proxy allowlist. This is
+> a **P0 for the public buckets** and is tracked here only because §12.5's limit shares
+> the mechanism; the fix belongs to §21.1's security gates, not to §12.
+
+| ID | Defect | Rule it violates | Severity |
+|---|---|---|---|
+| `D12-AI-005` | The rate-limit window store is an in-process `dict`, so limits reset on restart and do not hold across replicas. | §17.5 Redis necessity decision should be revisited before horizontal scaling | P2 |
+| `D12-AI-006` | `platform_core/services/ai_runtime/` still exists — a Stage 1 `AiRuntimeProvider` / `StubAiRuntimeProvider` skeleton superseded by `platform_core/website/ai_provider.py`. §12.2's amendment states no such package exists; it does, and a new agent may extend the wrong abstraction. **Delete it.** | §12.2 | P2 |
+| `D12-AI-007` | The retry loop sleeps after its final attempt, adding a pointless ~4 s to every fallback. | — | P3 |
+| `D12-AI-008` | `_apply_intake_assets` stitches only `hero_image_asset_id`, and only onto a `hero` or `about` section. A questionnaire-supplied **logo** has no visible placement path into the draft. **Verify before claiming the questionnaire's logo answer is honoured.** | §12.7 questionnaire rules | P2 — unverified |
+
+### 12.9.7 Key handling
+
+The Gemini API key currently in use is a **temporary founder-authorised key that is known
+to need rotation before any public traffic.** `FL-DEC-015` (provider, budget, fallback
+policy) remains formally open; the live path recorded above is an authorised interim
+implementation, **not** its closure. See Document 11 §26 (2026-09-12 status block).
+
+
 ---
 
 # 13. Frontend Implementation
@@ -2355,6 +2486,28 @@ NEXT_PUBLIC_PLATFORM_DOMAIN=platform.com
 ENVIRONMENT=production
 ```
 
+
+> **Amendment — 2026-09-12 (additive).** Corrections to the block above, as implemented.
+> `.env.example` carries the same issues and should be corrected with it.
+>
+> - **`GEMINI_MODEL` is missing and is read in production.** It overrides the
+>   `gemini-3.6-flash` default in `platform_core/website/ai_provider.py` (§12.9.1). Without
+>   it in the template, the one control over a retired or flaky model is undiscoverable.
+>   Add it.
+> - **`OPENAI_API_KEY=... # Server only (fallback)` is misleading.** There is no OpenAI
+>   provider, and the fallback for website generation is **deterministic**
+>   (`build_deterministic_draft`), never a second model. Retain it only as a commented
+>   placeholder, or remove it.
+> - **`AI_PROVIDER` is not read today.** `get_ai_provider()` selects on `GEMINI_API_KEY`
+>   presence alone. `AI_PROVIDER` becomes live when a second provider exists (§12.2).
+> - **`PAYMENT_PROVIDER` / `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` must not be read as
+>   merchant credentials.** Merchant collection uses **each Business's own** Razorpay
+>   credentials, entered by the owner and stored encrypted on `MerchantConnection`.
+>   Platform-level Razorpay keys, if any, belong to **platform billing** only. Conflating
+>   the two would breach the §17 payments boundary and Document 08 §§17–18; label these
+>   variables explicitly so no future change collapses the distinction.
+
+
 ## 19.3 Secret Management Rules
 
 - No secrets in source control.
@@ -2600,15 +2753,90 @@ Implementation stages and vertical slices remain governed by Document 11. Docume
 
 # 25. Final Build-Readiness Check
 
-**Can implementation now begin from Documents 01–12, with Document 12 Version 1.1 as the final implementation authority?**
+**Can implementation now begin from Documents 01–12, with Document 12 Version 1.4 as the final implementation authority?**
 
 **YES.**
 
 Broad pre-build planning is complete. A capable engineering team or coding AI can begin Stage 1 repository bootstrap and the first vertical slice immediately using:
 
 - Document 11 for scope, stages, gates, and vertical-slice sequencing
-- Document 12 Version 1.1 for monorepo layout, FastAPI modular-monolith structure, Python worker mechanics, database conventions, auth integration, API design, and deployment/testing expectations
+- Document 12 Version 1.4 for monorepo layout, FastAPI modular-monolith structure, Python worker mechanics, database conventions, auth integration, API design, and deployment/testing expectations
 - Documents 01–10 for product, experience, entitlement, and data-architecture authority (with Document 10 backend language superseded only as recorded in Section 0.2.1)
 
 **Repository-bootstrap blockers:** None introduced by this correction pass. Founder/commercial decisions classified in Document 11 §26 (for example `FL-DEC-003` payment provider, `FL-DEC-021` Super Admin Entitlement policy) remain governed at their natural implementation point and do not block monorepo bootstrap, schema foundation, identity shell, or Stage 1 vertical-slice start.
 
+
+---
+
+# 26. Stage Vocabulary and Build-Artifact Naming Errata
+
+> **Amendment — 2026-09-12 (additive, dated per Document 08 §25.3). Naming reconciliation
+> only: no scope, schema, or stage-definition change. Document 11 §17 remains the sole
+> stage authority.**
+
+## 26.1 The collision
+
+Document 11 §17 defines the canonical implementation stages:
+
+| Stage | Name |
+|---|---|
+| 1 | Platform Foundation |
+| 2 | Business Presence |
+| 3 | Discovery |
+| 4 | Commerce |
+| 5 | Reservations |
+| 6 | Relationships, Leads, Memberships, and Workforce Completion |
+| 7 | Platform Completion |
+| 8 | Launch Validation |
+
+Build artifacts in the repository do **not** consistently use that vocabulary. An earlier
+"kernel stage" numbering (1–9) was used for migration filenames and the engineering notes
+in `apps/api/docs/`, and both schemes now coexist under the same `stageN` prefix in the
+same directories — for example `20260727040000_stage3_location_people_kernel.sql` and
+`20260728000000_stage3_marketplace_discovery.sql`, which belong to different stages in
+different systems.
+
+The practical consequence is the one that matters: **a stage number read off a migration
+filename, a commit message, or an `apps/api/docs/` note is not necessarily a Document 11
+stage**, so "which stage are we in" cannot be answered from artifact names. That ambiguity
+is the reason this errata exists.
+
+## 26.2 Rule going forward
+
+`stageN` in any **new** migration, document, branch, or commit message refers to the
+**Document 11 §17** stage. The legacy "kernel stage" vocabulary is **closed** — do not
+extend it, and do not introduce a third scheme.
+
+Applied migration filenames are **not** renamed: they are immutable once applied, and
+renaming them would break migration history for no product gain.
+
+## 26.3 Errata map
+
+The right-hand column is **derived** from each artifact's content rather than from a prior
+record. It is written down so the ambiguity is resolved once instead of rediscovered, and
+should be confirmed at the next review rather than treated as previously approved.
+
+| Artifact (legacy label) | Document 11 stage it actually serves |
+|---|---|
+| `20260727040000_stage3_location_people_kernel.sql`, `apps/api/docs/stage-3-location-people-kernel.md` | **Stage 1** — Platform Foundation (Locations from day one, Team & Access) |
+| `20260727050000_stage4_customer_relationships_kernel.sql`, `stage-4-customer-relationships-kernel.md` | **Stage 6** — Customer Relationships at Basic depth |
+| `20260727060000_stage5_inventory_offerings_kernel.sql`, `stage-5-inventory-offerings-kernel.md` | **Stage 2** (Offerings foundation) and **Stage 4** (Inventory, Basic) |
+| `20260727070000_stage6_orders_kernel.sql`, `stage-6-orders-kernel.md` | **Stage 4** — Commerce |
+| `20260727080000_stage7_bookings_kernel.sql`, `stage-7-bookings-kernel.md` | **Stage 5** — Reservations |
+| `stage-8-finance-accounting-scope-verification.md` | Scope-verification note; maps to **no** Document 11 stage |
+| `20260727090000_stage9_payments_kernel.sql`, `stage-9-payments-kernel.md` | **Stage 4** — Commerce (Payments) |
+| `20260728000000_stage3_marketplace_discovery.sql`, `stage-3-marketplace-discovery.md` | **Stage 3** — Discovery *(already aligned)* |
+| `20260729000000_stage4_fulfilment_commerce.sql`, `stage-4-commerce-completion.md` | **Stage 4** — Commerce *(already aligned)* |
+| `20260730000000_stage5_workforce_booking_providers.sql`, `stage-5-reservations-completion.md` | **Stage 5** — Reservations *(already aligned)* |
+| `20260731000000_stage6_leads_memberships_kernel.sql` | **Stage 6** *(aligned; the `_kernel` suffix is vestigial)* |
+| `20260801000000_stage7_core_notifications.sql`, `20260802000000_stage7_rls_role_separation.sql`, `20260802010000_stage7_rls_infra_tables.sql`, `20260803000000_stage7_website_draft_supersede.sql`, `20260804000000_stage7_full_module_registry.sql` | **Stage 7** — Platform Completion *(already aligned)* |
+| `20260901000000_razorpay_merchant_credentials.sql`, `20260901010000_website_generation_intake.sql`, `20260901020000_media_storage.sql` | Unprefixed, and correctly so — corrective/additive work inside Stages 2 and 4 |
+
+## 26.4 Consequence for stage claims
+
+A stage is complete only when Document 11's **exit criteria** for it are demonstrated — not
+when a migration bearing its number has been applied. Because the numbering above is
+ambiguous, **no stage claim should cite a migration filename as its evidence.** Cite the
+Document 11 §17 exit criterion and the test or runtime observation that satisfies it.
+
+---

@@ -7,6 +7,46 @@
 **Authors:** Product Team  
 **Based On:** Vision v3 · Product Experience Bible · Business Kernel Specification v1
 
+> ### ⚠ Reader notice — historical foundation document (added 2026-09-12)
+>
+> This document has **not been amended since July 2026**. Parts of it have since
+> been superseded by approved decisions in Documents 05–12. The text below is
+> deliberately left unchanged — this notice is **navigational, not an amendment**,
+> and adds no new decision.
+>
+> **Before implementing anything from this document**, check the governing
+> registers: **Document 09 §19**, **Document 10 §36**, **Document 11 §27**, and
+> **Document 12 §0.1**. Where they conflict, **Document 12 governs**.
+>
+> Known-superseded content in this document:
+>
+> At 3,600 lines this is the largest document in the set and the most likely to be
+> read selectively. Several of its most-quoted structures have been superseded.
+>
+> | Content here | Governing position |
+> |---|---|
+> | Six-portal surface map | Omits the **Main Platform Website**, a first-class platform-owned surface — Document 05 `GAP-001`; Document 09 §19 |
+> | Accountant and Receptionist as **roles** | **Permission templates**, not roles. Invariant roles are Primary Owner, Manager, Member — `D10-CONFLICT-002` |
+> | Trust Score as an installable module | `svc-statistics-trust`, a shared service — Document 08 §22; `D10-CONFLICT-006` |
+> | `catalog-orders` as one module | Separate `offerings-catalog` and `orders` — `D10-CONFLICT-004` |
+> | Free-form / drag-and-drop / page-builder website implications | **Structured sections**, supported layout variants, and branding/navigation controls. AI authors **content only** — Document 10 §11, Document 12 §§12.6–12.8; `D11-CONFLICT-007` |
+> | Fixed Merchant Dashboard with a stable 21-module navigation tree | Business Workspace navigation is **adaptive** to type terminology, enabled modules, permission, and Location — `D11-CONFLICT-006` |
+> | Owner sees all navigation permanently | Owner retains authority, but navigation is **progressive and relevant** — Document 06 `RPA-CONFLICT-002` |
+> | Business type auto-provisions required/default modules | Type **recommends**; the Business explicitly selects — `D11-CONFLICT-005` |
+> | Events-only cross-module wording (Event Bus glossary, Appendix C §2) | Synchronous public contracts + asynchronous events — `D10-CONFLICT-010` |
+> | Marketplace discovery deferred beyond the first horizon | First Launch **includes** the search-first discovery loop — `D11-CONFLICT-001` |
+> | Module uninstall may hard-delete data | Deactivation retains history — `D10-CONFLICT-005` |
+> | Admin can impersonate a Business owner | Attributed Admin investigation/work mode only — `D11-CONFLICT-015` |
+> | Merchant gateway and platform billing shown together | **Permanently separate** concerns — Document 08 §§17–18 |
+> | Relevance labels ("MVP Essential" / "Post-MVP") | **Document 11** is the release-scope overlay; several Post-MVP families are promoted to First Launch — `D11-CONFLICT-008`, `D11-CONFLICT-009`, `D11-CONFLICT-016` |
+>
+> What **remains governing**: this document's answer to "if the platform were
+> complete, what exactly exists?" — the system, workflow, object-state,
+> notification, settings, and event inventories. Read it as the **complete-state
+> inventory**, never as launch scope or current structure.
+
+---
+
 ---
 
 > **How to Read This Document**
