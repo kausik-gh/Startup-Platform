@@ -15,6 +15,19 @@ from platform_core.services.audit import AuditService
 from platform_core.services.business import BusinessService
 
 
+def normalize_page_slug(raw: str) -> str:
+    """Canonicalise a generated page slug to the bare form the rest of the
+    system stores and looks up (``home``, ``menu``), never a path (``/menu``).
+
+    Generation output is model-authored, so it arrives in whichever shape the
+    provider felt like emitting. The public page lookup matches on the bare
+    slug, so a stored ``/menu`` is unreachable — every sub-page 404s while the
+    home page survives only on the ``page_type == "home"`` fallback.
+    """
+    slug = raw.strip().strip("/").lower()
+    return slug or "home"
+
+
 class WebsiteService:
     @staticmethod
     async def provision_for_business(
@@ -156,7 +169,7 @@ class WebsiteService:
             page = WebsitePage(
                 website_version_id=draft.id,
                 business_id=business_id,
-                slug=str(page_data["slug"]),
+                slug=normalize_page_slug(str(page_data["slug"])),
                 title=str(page_data["title"]),
                 page_type=str(page_data["page_type"]),
                 seo_title=page_data.get("seo_title"),

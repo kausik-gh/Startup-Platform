@@ -127,7 +127,13 @@ export default function CheckoutClient({
         <p>
           Order <strong>{confirmation.order_number}</strong>
         </p>
-        <p style={{ opacity: 0.8 }}>Status: {confirmation.state}</p>
+        <p style={{ opacity: 0.8 }}>
+          {confirmation.state === 'pending_offline'
+            ? 'Pay when you collect your order.'
+            : confirmation.state === 'paid'
+              ? 'Payment received.'
+              : 'The business has received your order.'}
+        </p>
         <p>
           <Link href={confirmation.tracking.href}>Track your order</Link>
         </p>

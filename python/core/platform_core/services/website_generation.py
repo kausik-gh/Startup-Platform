@@ -182,6 +182,79 @@ class WebsiteGenerationService:
                     return payload
         return payload
 
+    # Page types that exist to list what the business sells. The model is told
+    # about these but routinely returns the page with only a hero on it.
+    _CATALOGUE_PAGE_TYPES = frozenset(
+        {"offerings", "services", "menu", "rooms", "plans", "classes", "products"}
+    )
+    _CATALOGUE_SLUGS = frozenset(
+        {"menu", "offerings", "services", "rooms", "plans", "classes", "products", "shop"}
+    )
+
+    @staticmethod
+    def _offerings_section(title: str, name: str) -> dict[str, Any]:
+        return {
+            "section_type_id": "offerings_list",
+            "layout_variant": "cards",
+            "content": {
+                "title": title,
+                "subtitle": f"Explore {title.lower()} from {name}",
+                "max_items": 12,
+            },
+            # Bound to the module, not to generated copy — the section renders
+            # the Business's real catalogue and stays correct as it changes.
+            "module_binding": {"module": "offerings-catalog"},
+            "is_visible": True,
+        }
+
+    @staticmethod
+    def _complete_structure(
+        payload: dict[str, Any], context: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Guarantee the structure the model is unreliable about.
+
+        The AI supplies voice and copy; it must not be trusted to remember that
+        a Menu page needs a menu on it. Any page whose type or slug says it
+        lists the catalogue gets a module-bound offerings section if the model
+        omitted one, and the home page gets a preview of the catalogue so the
+        first thing a visitor sees is what the business actually sells.
+        """
+        name = context.get("display_name") or "this business"
+        for page in payload.get("pages") or []:
+            sections = page.get("sections")
+            if not isinstance(sections, list):
+                continue
+            has_offerings = any(
+                s.get("section_type_id") == "offerings_list" for s in sections
+            )
+            if has_offerings:
+                continue
+            page_type = str(page.get("page_type") or "").lower()
+            slug = str(page.get("slug") or "").strip("/").lower()
+            title = str(page.get("title") or "What we offer")
+
+            if (
+                page_type in WebsiteGenerationService._CATALOGUE_PAGE_TYPES
+                or slug in WebsiteGenerationService._CATALOGUE_SLUGS
+            ):
+                sections.append(WebsiteGenerationService._offerings_section(title, name))
+            elif page_type == "home" or slug in {"", "home", "index"}:
+                # Sits after the hero, before any closing CTA band.
+                preview = WebsiteGenerationService._offerings_section(
+                    "What we offer", name
+                )
+                preview["content"]["max_items"] = 6
+                cta_at = next(
+                    (
+                        i
+                        for i, s in enumerate(sections)
+                        if s.get("section_type_id") == "cta_band"
+                    ),
+                    len(sections),
+                )
+                sections.insert(cta_at, preview)
+        return payload
+
     @staticmethod
     async def execute_job(
         session: AsyncSession,
@@ -230,8 +303,10 @@ class WebsiteGenerationService:
             job.model_name = None
 
         payload = WebsiteGenerationService._apply_intake_assets(payload, intake)
-        # Re-validate: the stitched asset id has not been through the schema
-        # + content-safety pass that _try_ai / the fallback already applied.
+        payload = WebsiteGenerationService._complete_structure(payload, context)
+        # Re-validate: the stitched asset id and the completion pass have not
+        # been through the schema + content-safety pass that _try_ai / the
+        # fallback already applied.
         payload = validate_generation_payload(payload)
 
         async def _write(p: dict[str, Any], source: str) -> Any:

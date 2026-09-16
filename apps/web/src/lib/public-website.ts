@@ -41,3 +41,13 @@ export async function fetchPublicWebsite(
   const json = (await res.json()) as { data: PublicWebsitePayload }
   return json.data
 }
+
+/** Tab title and description for a public Business Website page. The visitor is
+ *  on the business's own site, so the business name owns the tab — not LOCAH. */
+export function websiteMetadata(data: PublicWebsitePayload | null) {
+  if (!data) return {}
+  return {
+    title: data.page.seo_title || `${data.page.title} | ${data.business.display_name}`,
+    description: data.page.seo_description || undefined,
+  }
+}
