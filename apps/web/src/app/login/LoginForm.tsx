@@ -1,14 +1,18 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { resolveDestinationIntent } from '@platform/auth'
 import { createClient } from '@/lib/supabase/client'
+import { Wordmark } from '@/components/public/Wordmark'
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
@@ -17,10 +21,10 @@ export function LoginForm() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    setNotice(null)
+    setBusy(true)
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setBusy(false)
 
     if (error) {
       setError(error.message)
@@ -33,61 +37,96 @@ export function LoginForm() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setNotice(null)
+    setBusy(true)
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
+    setBusy(false)
 
     if (error) {
       setError(error.message)
     } else {
-      setError('Check your email for the confirmation link.')
+      setNotice('Check your email for the confirmation link, then sign in.')
     }
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
-      <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '300px', padding: '2rem', border: '1px solid #ccc', borderRadius: '8px' }}>
-        <h2>Login</h2>
-
-        {error && <div style={{ color: 'red', fontSize: '0.875rem' }}>{error}</div>}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label htmlFor="email">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            style={{ padding: '0.5rem' }}
-          />
+    <div className="locah-public ob-shell">
+      <header className="ob-shell__head">
+        <div className="lc-container">
+          <Link href="/" aria-label="LOCAH home">
+            <Wordmark />
+          </Link>
         </div>
+      </header>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label htmlFor="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{ padding: '0.5rem' }}
-          />
-        </div>
+      <main className="lc-container" style={{ maxWidth: '27rem', paddingBlock: '3rem 4rem' }}>
+        <form className="lc-card" onSubmit={handleLogin}>
+          <h1 style={{ fontSize: '1.6rem', marginBottom: '0.35rem' }}>Sign in</h1>
+          <p className="lc-muted lc-small" style={{ marginBottom: 'var(--sp-6)' }}>
+            Use your email to continue to your business.
+          </p>
 
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-          <button type="submit" onClick={handleLogin} style={{ flex: 1, padding: '0.5rem', backgroundColor: '#0070f3', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-            Sign In
-          </button>
-          <button type="button" onClick={handleSignUp} style={{ flex: 1, padding: '0.5rem', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-            Sign Up
-          </button>
-        </div>
-      </form>
+          {error ? (
+            <div role="alert" className="ob-error" style={{ marginBottom: 'var(--sp-4)' }}>
+              <p>{error}</p>
+            </div>
+          ) : null}
+
+            {notice ? (
+            <div role="status" className="ob-notice" style={{ marginBottom: 'var(--sp-4)' }}>
+              <p>{notice}</p>
+            </div>
+          ) : null}
+
+          <div className="ob-field">
+            <label htmlFor="email" className="ob-label">
+              Email
+            </label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              className="ob-input"
+            />
+          </div>
+
+          <div className="ob-field">
+            <label htmlFor="password" className="ob-label">
+              Password
+            </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              className="ob-input"
+            />
+          </div>
+
+          <div style={{ display: 'grid', gap: '0.6rem' }}>
+            <button type="submit" disabled={busy} className="lc-btn lc-btn--primary lc-btn--block">
+              {busy ? 'Signing in…' : 'Sign in'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSignUp}
+              disabled={busy}
+              className="lc-btn lc-btn--ghost lc-btn--block"
+            >
+              Create an account
+            </button>
+          </div>
+        </form>
+      </main>
     </div>
   )
 }

@@ -27,6 +27,7 @@ export async function createBusinessAction(
   const displayName = String(formData.get('display_name') || '').trim()
   const businessType = String(formData.get('business_type') || '').trim()
   const tagline = String(formData.get('tagline') || '').trim()
+  const description = String(formData.get('description') || '').trim()
 
   if (!displayName) return { error: 'Give your business a name.' }
   if (!businessType) return { error: 'Choose the option that best describes your business.' }
@@ -50,10 +51,14 @@ export async function createBusinessAction(
   // The Marketplace will not list a Business whose profile has neither a
   // tagline nor a description (`profile_public_facts_missing`), and business
   // creation does not accept either field. Set it here so onboarding produces
-  // a Business that can actually become discoverable. Non-fatal: a failure
-  // here should not strand someone whose Business already exists.
-  if (tagline) {
-    await apiPatch(`/v1/platform/businesses/${businessId}/profile`, token, { tagline })
+  // a Business that can actually become discoverable. The description matters
+  // twice over: website generation writes the site from it. Non-fatal: a
+  // failure here should not strand someone whose Business already exists.
+  if (tagline || description) {
+    await apiPatch(`/v1/platform/businesses/${businessId}/profile`, token, {
+      ...(tagline ? { tagline } : {}),
+      ...(description ? { description } : {}),
+    })
   }
 
   redirect(`/start/${businessId}/website/questions`)

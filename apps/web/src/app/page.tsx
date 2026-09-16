@@ -1,231 +1,371 @@
 import Link from 'next/link'
 import { getAccessToken } from '@/lib/supabase/access-token'
 import { listMyBusinesses, type BusinessSummary } from '@/lib/platform-api'
+import { fetchSearch, type SearchResponse } from '@/lib/marketplace-api'
+import { PublicNav } from '@/components/public/PublicNav'
+import { PublicFooter } from '@/components/public/PublicFooter'
 
 export const dynamic = 'force-dynamic'
 
 const WORKSPACE_URL = process.env.NEXT_PUBLIC_WORKSPACE_URL || 'http://localhost:3001'
 
-const PAGE: React.CSSProperties = {
-  minHeight: '100vh',
-  fontFamily: 'Georgia, "Iowan Old Style", serif',
-  background:
-    'radial-gradient(circle at 15% 10%, #dbeae2 0%, transparent 42%), linear-gradient(160deg, #f8f4ec, #e8eef5)',
-  color: '#1c2430',
-  padding: '2rem 1.5rem 4rem',
-}
-const SHELL: React.CSSProperties = { maxWidth: '58rem', margin: '0 auto' }
-const CARD: React.CSSProperties = {
-  display: 'block',
-  padding: '1.5rem 1.6rem',
-  borderRadius: '12px',
-  border: '1px solid rgba(28,36,48,0.14)',
-  background: 'rgba(255,255,255,0.72)',
-  textDecoration: 'none',
-  color: 'inherit',
-}
-const PRIMARY_BTN: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '0.7rem 1.4rem',
-  borderRadius: '8px',
-  background: '#1c5f57',
-  color: '#fff',
-  textDecoration: 'none',
-  fontWeight: 600,
-  fontFamily: 'system-ui, sans-serif',
-  fontSize: '0.95rem',
+function money(amount?: number | null, currency?: string | null) {
+  if (amount === null || amount === undefined) return null
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: currency || 'INR',
+      maximumFractionDigits: Number.isInteger(amount) ? 0 : 2,
+    }).format(amount)
+  } catch {
+    return `${currency || 'INR'} ${amount}`
+  }
 }
 
-function Masthead({ signedIn = false }: { signedIn?: boolean }) {
+/* ---------------------------------------------------------------- hero ---- */
+
+/** A real business's real website, drawn small. Never mock copy: if the
+ *  Marketplace is empty this falls back to the generic frame below. */
+function SitePreview({ live }: { live: SearchResponse | null }) {
+  const business = live?.businesses?.[0]
+  const items = (live?.offerings || []).slice(0, 3)
+
   return (
-    <header
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        gap: '1rem',
-        flexWrap: 'wrap',
-        marginBottom: '3rem',
-      }}
-    >
-      <span style={{ fontSize: '1.15rem', fontWeight: 600 }}>Platform</span>
-      <nav
-        style={{
-          display: 'flex',
-          gap: '1.25rem',
-          alignItems: 'center',
-          fontFamily: 'system-ui, sans-serif',
-          fontSize: '0.9rem',
-        }}
-      >
-        <Link href="/marketplace">Marketplace</Link>
-        <Link href="/activity">My activity</Link>
-        {signedIn ? (
-          <form action="/auth/logout" method="post" style={{ margin: 0 }}>
-            <button
-              type="submit"
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                font: 'inherit',
-                color: '#1c5f57',
-                textDecoration: 'underline',
-                cursor: 'pointer',
-              }}
-            >
-              Sign out
-            </button>
-          </form>
-        ) : (
-          <Link href="/login">Sign in</Link>
-        )}
-      </nav>
-    </header>
-  )
-}
-
-/** Signed in, and they already run at least one Business. */
-function OwnerHome({ businesses }: { businesses: BusinessSummary[] }) {
-  return (
-    <div style={PAGE}>
-      <div style={SHELL}>
-        <Masthead signedIn />
-        <h1 style={{ fontSize: '2.1rem', margin: '0 0 0.4rem' }}>Your businesses</h1>
-        <p style={{ color: '#4c5967', margin: '0 0 2rem', lineHeight: 1.6 }}>
-          Open a Workspace to manage your website, offerings, orders and bookings.
-        </p>
-
-        <div style={{ display: 'grid', gap: '0.9rem' }}>
-          {businesses.map((b) => (
-            <a key={b.id} href={`${WORKSPACE_URL}/b/${b.id}`} style={CARD}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 600 }}>{b.display_name}</div>
-                  <div
-                    style={{
-                      fontFamily: 'system-ui, sans-serif',
-                      fontSize: '0.85rem',
-                      color: '#4c5967',
-                      marginTop: '0.2rem',
-                    }}
-                  >
-                    /{b.slug}
-                    {b.business_type ? ` · ${b.business_type.replace(/_/g, ' ')}` : ''}
-                    {b.state && b.state !== 'active' ? ` · ${b.state}` : ''}
+    <div className="lc-frame" aria-hidden="true">
+      <div className="lc-frame__bar">
+        <span className="lc-frame__dot" />
+        <span className="lc-frame__dot" />
+        <span className="lc-frame__dot" />
+        <span className="lc-frame__addr">
+          locah.app/{business?.slug || 'your-business'}
+        </span>
+      </div>
+      <div className="lc-frame__body">
+        <div className="hp-mini">
+          <div className="hp-mini__nav">
+            <strong>{business?.display_name || 'Your Business'}</strong>
+            <span>Home</span>
+            <span>Menu</span>
+            <span>Contact</span>
+          </div>
+          <div className="hp-mini__hero">
+            <p className="hp-mini__eyebrow">
+              {(business?.business_type || 'local business').replace(/_/g, ' ')}
+            </p>
+            <h3>{business?.display_name || 'Everything you make, online'}</h3>
+            <span className="hp-mini__cta">Order now</span>
+          </div>
+          <div className="hp-mini__items">
+            {items.length > 0
+              ? items.map((o) => (
+                  <div className="hp-mini__item" key={o.id}>
+                    <span>{o.title}</span>
+                    <b>{money(o.price_from, o.currency)}</b>
                   </div>
-                </div>
-                <span style={{ alignSelf: 'center', fontFamily: 'system-ui, sans-serif', fontWeight: 600 }}>
-                  Open Workspace →
-                </span>
-              </div>
-            </a>
-          ))}
-        </div>
-
-        <div
-          style={{
-            marginTop: '2.5rem',
-            display: 'flex',
-            gap: '1.5rem',
-            flexWrap: 'wrap',
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: '0.92rem',
-          }}
-        >
-          <Link href="/start">+ Add another business</Link>
-          <Link href="/marketplace">Browse the marketplace</Link>
+                ))
+              : ['Your first product', 'Your second product', 'Your third product'].map((t) => (
+                  <div className="hp-mini__item" key={t}>
+                    <span>{t}</span>
+                    <b>—</b>
+                  </div>
+                ))}
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-/** Everyone else: the actual front door. */
-function LandingHome() {
+function Hero({ live }: { live: SearchResponse | null }) {
   return (
-    <div style={PAGE}>
-      <div style={SHELL}>
-        <Masthead />
-
-        <h1 style={{ fontSize: 'clamp(2rem, 5vw, 2.9rem)', lineHeight: 1.15, margin: '0 0 1rem' }}>
-          Everything a local business needs to be found and to sell — in one place.
-        </h1>
-        <p
-          style={{
-            fontSize: '1.15rem',
-            lineHeight: 1.65,
-            color: '#3c4855',
-            maxWidth: '42rem',
-            margin: '0 0 2.75rem',
-          }}
-        >
-          Set up your business and you get a real website, a listing customers can find you
-          through, and working orders, bookings and payments. No separate tools to stitch
-          together.
-        </p>
-
-        <div
-          style={{
-            display: 'grid',
-            gap: '1.1rem',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(17rem, 1fr))',
-          }}
-        >
-          <Link href="/start" style={{ ...CARD, borderColor: '#1c5f57', borderWidth: '2px' }}>
-            <h2 style={{ fontSize: '1.3rem', margin: '0 0 0.5rem' }}>I run a business</h2>
-            <p
-              style={{
-                fontFamily: 'system-ui, sans-serif',
-                fontSize: '0.94rem',
-                lineHeight: 1.6,
-                color: '#3c4855',
-                margin: '0 0 1.1rem',
-              }}
-            >
-              Tell us what you do. We build your website, then recommend the tools that fit
-              your kind of business so you can start taking orders or bookings.
+    <section className="lc-section lc-ground-paper hp-hero">
+      <div className="lc-container lc-container--wide">
+        <div className="lc-split">
+          <div className="lc-rise lc-rise-1">
+            <p className="lc-eyebrow">Local Businesses. Limitless Possibilities.</p>
+            <h1 className="lc-display">
+              Your business, <span className="lc-mark">fully digital</span> — in an afternoon.
+            </h1>
+            <p className="lc-lead">
+              Tell LOCAH what you do. You get a real website, a listing customers can find you
+              through, and working orders, bookings and payments — not a pile of tools to stitch
+              together yourself.
             </p>
-            <span style={PRIMARY_BTN}>Set up my business</span>
-          </Link>
-
-          <Link href="/marketplace" style={CARD}>
-            <h2 style={{ fontSize: '1.3rem', margin: '0 0 0.5rem' }}>Browse businesses</h2>
-            <p
-              style={{
-                fontFamily: 'system-ui, sans-serif',
-                fontSize: '0.94rem',
-                lineHeight: 1.6,
-                color: '#3c4855',
-                margin: '0 0 1.1rem',
-              }}
-            >
-              Find local businesses, see what they offer, and order or book directly — no
-              account needed to look around.
+            <div className="lc-row" style={{ marginTop: 'var(--sp-6)' }}>
+              <Link className="lc-btn lc-btn--primary lc-btn--lg" href="/start">
+                Get started
+              </Link>
+              <Link className="lc-btn lc-btn--ghost lc-btn--lg" href="/marketplace">
+                Explore the Marketplace
+              </Link>
+            </div>
+            <p className="lc-small lc-muted" style={{ marginTop: 'var(--sp-4)' }}>
+              No card required to set up. Your site stays private until you publish it.
             </p>
-            <span
-              style={{
-                ...PRIMARY_BTN,
-                background: 'transparent',
-                color: '#1c5f57',
-                border: '1px solid #1c5f57',
-              }}
-            >
-              Open the marketplace
-            </span>
+          </div>
+
+          <div className="lc-rise lc-rise-2" style={{ position: 'relative' }}>
+            <SitePreview live={live} />
+            {/* Sit outside the frame edges — overlapping the preview would
+                hide the very thing they are pointing at. */}
+            <div className="lc-float" style={{ right: '-1.75rem', top: '-1.25rem' }}>
+              <p className="lc-float__label">Website</p>
+              <p className="lc-float__value">Generated &amp; editable</p>
+            </div>
+            <div className="lc-float" style={{ left: '-2.25rem', bottom: '-2.75rem' }}>
+              <p className="lc-float__label">Orders</p>
+              <p className="lc-float__value">Live from day one</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------- journey ---- */
+
+const JOURNEY = [
+  {
+    eyebrow: 'Presence',
+    title: 'A website that looks like your business',
+    body: 'LOCAH reads what kind of business you run and builds a structured site to match — a menu for a café, rooms for a stay, plans for a gym. Every word and image stays editable.',
+    points: ['Pages, sections and theme', 'Your photos or ours', 'Publish when you are ready'],
+  },
+  {
+    eyebrow: 'Discovery',
+    title: 'Customers can actually find you',
+    body: 'Publishing puts you in the LOCAH Marketplace, where people search by what they want and where they are — not by whether they already knew your name.',
+    points: ['Searchable by type and place', 'Your offerings are indexed', 'One link that works everywhere'],
+  },
+  {
+    eyebrow: 'Trade',
+    title: 'Take the order without leaving',
+    body: 'The same catalogue that fills your website fills your checkout. Customers order or book on your site and it lands in your Workspace as real work to do.',
+    points: ['Cart, checkout and tracking', 'Pickup or delivery', 'Pay online or on collection'],
+  },
+  {
+    eyebrow: 'Operations',
+    title: 'Run the business, not the software',
+    body: 'Orders, bookings, customers, payments and stock live in one Workspace. Switch on only the parts your business needs — the rest stays out of your way.',
+    points: ['One place for the day', 'Modules you choose', 'Roles for your team'],
+  },
+]
+
+function Journey() {
+  return (
+    <section className="lc-section lc-ground-cream">
+      <div className="lc-container lc-container--wide">
+        <div className="lc-center" style={{ marginBottom: 'var(--sp-8)' }}>
+          <p className="lc-eyebrow">From &ldquo;I have a business&rdquo; to a business that runs</p>
+          <h2>Four things every local business needs. One platform that does all four.</h2>
+        </div>
+
+        <div className="lc-grid lc-grid--2">
+          {JOURNEY.map((j) => (
+            <article className="lc-card" key={j.title}>
+              <p className="lc-eyebrow">{j.eyebrow}</p>
+              <h3 className="lc-card__title">{j.title}</h3>
+              <p className="lc-card__body">{j.body}</p>
+              <ul className="hp-ticks">
+                {j.points.map((p) => (
+                  <li key={p}>{p}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ---------------------------------------------------------------- types ---- */
+
+const TYPES = [
+  { label: 'Restaurants & cafés', detail: 'Menu, orders, delivery' },
+  { label: 'Home food', detail: 'Daily menu, pickup, pre-orders' },
+  { label: 'Salons & spas', detail: 'Services, appointments, staff' },
+  { label: 'Gyms & studios', detail: 'Plans, classes, memberships' },
+  { label: 'Hotels & stays', detail: 'Rooms, availability, bookings' },
+  { label: 'Real estate', detail: 'Listings, enquiries, viewings' },
+  { label: 'Retail', detail: 'Products, stock, fulfilment' },
+  { label: 'Professional services', detail: 'Services, leads, invoicing' },
+  { label: 'Classes & coaching', detail: 'Schedules, seats, enrolment' },
+]
+
+function BuiltFor() {
+  return (
+    <section className="lc-section">
+      <div className="lc-container lc-container--wide">
+        <div className="lc-split">
+          <div>
+            <p className="lc-eyebrow">Built for your kind of business</p>
+            <h2>A café and a gym should not get the same website.</h2>
+            <p className="lc-lead">
+              LOCAH models your business properly — what you sell, how people get it, and what you
+              need to run it. The website, the checkout and the Workspace all change to match.
+            </p>
+            <Link className="lc-btn lc-btn--primary" href="/start" style={{ marginTop: 'var(--sp-5)' }}>
+              Set up your business
+            </Link>
+          </div>
+          <ul className="hp-types">
+            {TYPES.map((t) => (
+              <li key={t.label}>
+                <strong>{t.label}</strong>
+                <span className="lc-muted lc-small">{t.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ----------------------------------------------------------------- how ---- */
+
+function HowItWorks() {
+  return (
+    <section className="lc-section lc-ground-ink">
+      <div className="lc-container lc-container--wide">
+        <div className="lc-split">
+          <div>
+            <p className="lc-eyebrow">How it works</p>
+            <h2>Four steps, and you are open.</h2>
+            <p className="lc-lead" style={{ color: 'var(--locah-n-300)' }}>
+              Most owners are published the same day. Nothing you enter is thrown away — it becomes
+              your catalogue, your site and your storefront at once.
+            </p>
+          </div>
+          <ol className="lc-steps">
+            <li className="lc-step">
+              <div>
+                <p className="lc-step__title">Tell us what you do</p>
+                <p className="lc-step__body">
+                  Your business type, name and place. A handful of questions that change depending
+                  on what you run — not a database form.
+                </p>
+              </div>
+            </li>
+            <li className="lc-step">
+              <div>
+                <p className="lc-step__title">LOCAH builds your site</p>
+                <p className="lc-step__body">
+                  Pages, sections, copy and theme, generated as structured content you can edit —
+                  never a block of code you cannot change.
+                </p>
+              </div>
+            </li>
+            <li className="lc-step">
+              <div>
+                <p className="lc-step__title">Make it yours, then publish</p>
+                <p className="lc-step__body">
+                  Edit any text or image, add your offerings, preview it, and publish when it reads
+                  the way you want.
+                </p>
+              </div>
+            </li>
+            <li className="lc-step">
+              <div>
+                <p className="lc-step__title">Start taking orders</p>
+                <p className="lc-step__body">
+                  You appear in the Marketplace, customers order or book, and the work arrives in
+                  your Workspace.
+                </p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* --------------------------------------------------------- marketplace ---- */
+
+function LiveOnLocah({ live }: { live: SearchResponse | null }) {
+  const businesses = (live?.businesses || []).slice(0, 6)
+  if (businesses.length === 0) return null
+
+  return (
+    <section className="lc-section lc-ground-cream">
+      <div className="lc-container lc-container--wide">
+        <div className="lc-row lc-row--between" style={{ marginBottom: 'var(--sp-6)' }}>
+          <div>
+            <p className="lc-eyebrow">For customers</p>
+            <h2>Discover what is open around you.</h2>
+          </div>
+          <Link className="lc-btn lc-btn--ghost" href="/marketplace">
+            Open the Marketplace
           </Link>
         </div>
 
-        <p
-          style={{
-            marginTop: '2.5rem',
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: '0.9rem',
-            color: '#4c5967',
-          }}
-        >
-          Already set up? <Link href="/login">Sign in</Link>.
-        </p>
+        <div className="lc-grid lc-grid--3">
+          {businesses.map((b) => (
+            <Link className="lc-mediacard" key={b.business_id} href={`/${b.slug}`}>
+              <div className="lc-mediacard__media">
+                <div className="lc-mediacard__fallback">
+                  {b.display_name.slice(0, 1).toUpperCase()}
+                </div>
+              </div>
+              <div className="lc-mediacard__body">
+                <h3 className="lc-mediacard__title">{b.display_name}</h3>
+                <p className="lc-mediacard__meta">
+                  {(b.business_type || 'Local business').replace(/_/g, ' ')}
+                  {b.city ? ` · ${b.city}` : ''}
+                </p>
+                {b.description ? <p className="lc-muted lc-small">{b.description}</p> : null}
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ----------------------------------------------------------------- CTA ---- */
+
+function ClosingCta() {
+  return (
+    <section className="lc-section">
+      <div className="lc-container">
+        <div className="lc-center">
+          <h2>Ready to take your business digital?</h2>
+          <p className="lc-lead" style={{ marginInline: 'auto' }}>
+            Set it up once. Your website, your listing and your day-to-day all come from the same
+            place — so they never disagree.
+          </p>
+          <div className="lc-row lc-row--center" style={{ marginTop: 'var(--sp-6)' }}>
+            <Link className="lc-btn lc-btn--primary lc-btn--lg" href="/start">
+              Set up your business
+            </Link>
+            <Link className="lc-btn lc-btn--ghost lc-btn--lg" href="/for-businesses">
+              See how it works
+            </Link>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/** Signed-in owners keep the marketing page but get a way back to work. */
+function ResumeBar({ businesses }: { businesses: BusinessSummary[] }) {
+  const first = businesses[0]
+  return (
+    <div className="hp-resume">
+      <div className="lc-container lc-container--wide lc-row lc-row--between">
+        <span className="lc-small">
+          Signed in — you run{' '}
+          <strong>{first.display_name}</strong>
+          {businesses.length > 1 ? ` and ${businesses.length - 1} more` : ''}.
+        </span>
+        <a className="lc-btn lc-btn--sm lc-btn--primary" href={`${WORKSPACE_URL}/b/${first.id}`}>
+          Open Workspace
+        </a>
       </div>
     </div>
   )
@@ -233,12 +373,30 @@ function LandingHome() {
 
 export default async function HomePage() {
   const token = await getAccessToken()
-  if (!token) return <LandingHome />
 
-  // Signed in: send owners to something useful rather than the generic pitch.
-  // A failed lookup falls back to the landing page rather than erroring.
-  const businesses = await listMyBusinesses(token)
-  const open = businesses.filter((b) => b.state !== 'closed')
-  if (open.length > 0) return <OwnerHome businesses={open} />
-  return <LandingHome />
+  // Both are best-effort: the front door must render even if the API is down.
+  const [businesses, live] = await Promise.all([
+    token
+      ? listMyBusinesses(token)
+          .then((bs) => bs.filter((b) => b.state !== 'closed'))
+          .catch(() => [] as BusinessSummary[])
+      : Promise.resolve([] as BusinessSummary[]),
+    fetchSearch({}).catch(() => null),
+  ])
+
+  return (
+    <div className="locah-public">
+      <PublicNav signedIn={Boolean(token)} />
+      {businesses.length > 0 ? <ResumeBar businesses={businesses} /> : null}
+      <main>
+        <Hero live={live} />
+        <Journey />
+        <BuiltFor />
+        <HowItWorks />
+        <LiveOnLocah live={live} />
+        <ClosingCta />
+      </main>
+      <PublicFooter />
+    </div>
+  )
 }

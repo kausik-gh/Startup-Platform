@@ -45,11 +45,12 @@ export default async function DonePage({ params }: { params: { businessId: strin
     <OnboardingShell>
       <Steps current={4} />
       <h1 style={{ fontSize: '2rem', margin: '0 0 0.6rem' }}>
-        {business?.display_name || 'Your business'} is live
+        {business?.display_name || 'Your business'} is set up
       </h1>
       <p style={{ color: '#3c4855', lineHeight: 1.65, margin: '0 0 1.75rem', maxWidth: '36rem' }}>
         Your website is built and these tools are switched on. Everything below now has a real
-        page in your Workspace.
+        page in your Workspace. Two steps left to go live for customers — both are in your
+        Workspace.
       </p>
 
       {live.length > 0 ? (
@@ -85,24 +86,43 @@ export default async function DonePage({ params }: { params: { businessId: strin
 
       <HandOff href={`${WORKSPACE_URL}/b/${params.businessId}`} />
 
-      <p
+      <div
         style={{
           marginTop: '2.25rem',
+          padding: '1.1rem 1.25rem',
+          border: '1px solid rgba(28,95,87,0.25)',
+          borderRadius: '10px',
+          background: 'rgba(28,95,87,0.06)',
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '0.87rem',
-          color: '#4c5967',
+          fontSize: '0.9rem',
+          color: '#25323f',
           lineHeight: 1.6,
+          maxWidth: '36rem',
         }}
       >
-        Your site isn&apos;t public yet — publish it from the Workspace when you&apos;re happy
-        with it.{' '}
-        {business ? (
-          <>
-            It will live at <code>/{business.slug}</code>.
-          </>
-        ) : null}{' '}
-        <Link href="/">Back to home</Link>
-      </p>
+        <strong style={{ display: 'block', marginBottom: '0.5rem' }}>
+          To go live for customers
+        </strong>
+        <ol style={{ margin: 0, paddingLeft: '1.1rem' }}>
+          <li>
+            <strong>Website → Preview &amp; publish</strong> — puts your site online
+            {business ? (
+              <>
+                {' '}
+                at <code>/{business.slug}</code>
+              </>
+            ) : null}
+            .
+          </li>
+          <li style={{ marginTop: '0.35rem' }}>
+            <strong>Marketplace → Confirm &amp; become discoverable</strong> — lets customers
+            find you in search.
+          </li>
+        </ol>
+        <p style={{ margin: '0.75rem 0 0', color: '#4c5967' }}>
+          Until both are done, your business stays private. <Link href="/">Back to home</Link>
+        </p>
+      </div>
     </OnboardingShell>
   )
 }

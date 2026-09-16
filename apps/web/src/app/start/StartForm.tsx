@@ -7,24 +7,30 @@ export type BusinessType = { type_id: string; display_name: string; category: st
 
 const INITIAL: CreateBusinessState = { error: null }
 
+/** What choosing this type actually changes, in the owner's terms. Keyed by the
+ *  type ids the platform supports; anything unrecognised simply shows no hint
+ *  rather than a guess. */
+const TYPE_HINT: Record<string, string> = {
+  restaurant: 'Menu, orders, delivery or pickup',
+  cafe: 'Menu, orders, quick pickup',
+  retail: 'Products, stock, fulfilment',
+  salon: 'Services, appointments, staff',
+  spa: 'Treatments, appointments, staff',
+  hotel: 'Rooms, availability, reservations',
+  homestay: 'Rooms, availability, reservations',
+  gym: 'Plans, memberships, classes',
+  studio: 'Classes, schedules, memberships',
+  clinic: 'Services, appointments, patients',
+  professional_service: 'Services, enquiries, follow-up',
+  education: 'Courses, enrolment, schedules',
+  other: 'A general set you can adjust later',
+  not_sure: 'We will suggest a starting point',
+}
+
 function SubmitButton() {
   const { pending } = useFormStatus()
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      style={{
-        padding: '0.75rem 1.5rem',
-        borderRadius: '8px',
-        border: 'none',
-        background: pending ? '#7d9c96' : '#1c5f57',
-        color: '#fff',
-        fontWeight: 600,
-        fontSize: '0.98rem',
-        cursor: pending ? 'progress' : 'pointer',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
+    <button type="submit" disabled={pending} className="lc-btn lc-btn--primary lc-btn--lg">
       {pending ? 'Creating your business…' : 'Create business & build my website'}
     </button>
   )
@@ -34,100 +40,85 @@ export function StartForm({ types }: { types: BusinessType[] }) {
   const [state, formAction] = useFormState(createBusinessAction, INITIAL)
 
   return (
-    <form action={formAction} style={{ display: 'grid', gap: '1.6rem', maxWidth: '34rem' }}>
+    <form action={formAction}>
       {state.error ? (
-        <p
-          role="alert"
-          style={{
-            margin: 0,
-            padding: '0.8rem 1rem',
-            borderRadius: '8px',
-            border: '1px solid #c9776f',
-            background: '#f8e9e7',
-            color: '#8d2f24',
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: '0.92rem',
-          }}
-        >
-          {state.error}
-        </p>
+        <div role="alert" className="ob-error" style={{ marginBottom: 'var(--sp-5)' }}>
+          <p>{state.error}</p>
+        </div>
       ) : null}
 
-      <label style={{ display: 'grid', gap: '0.4rem' }}>
-        <span style={{ fontWeight: 600 }}>What is your business called?</span>
+      <fieldset className="ob-field" style={{ border: 0, padding: 0, margin: '0 0 var(--sp-7)' }}>
+        <legend className="ob-label" style={{ marginBottom: '0.6rem' }}>
+          What kind of business is it?
+        </legend>
+        <p className="ob-help" style={{ margin: '0 0 var(--sp-4)' }}>
+          This is the important one — it decides how your website is built and which tools we
+          recommend. You can change it later.
+        </p>
+        <div className="ob-types">
+          {types.map((t) => (
+            <label className="ob-type" key={t.type_id}>
+              <input type="radio" name="business_type" value={t.type_id} required />
+              <span className="ob-type__box">
+                <span className="ob-type__name">{t.display_name}</span>
+                {TYPE_HINT[t.type_id] ? (
+                  <span className="ob-type__hint">{TYPE_HINT[t.type_id]}</span>
+                ) : null}
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="ob-field">
+        <label className="ob-label" htmlFor="display_name">
+          What is your business called?
+        </label>
         <input
+          id="display_name"
           name="display_name"
+          className="ob-input"
           required
           maxLength={200}
-          autoFocus
           placeholder="e.g. Corner Coffee House"
-          style={{
-            padding: '0.65rem 0.8rem',
-            borderRadius: '8px',
-            border: '1px solid rgba(28,36,48,0.28)',
-            fontSize: '1rem',
-            fontFamily: 'system-ui, sans-serif',
-          }}
         />
-        <span
-          style={{ fontSize: '0.83rem', color: '#4c5967', fontFamily: 'system-ui, sans-serif' }}
-        >
-          This is the name customers will see on your website and marketplace listing.
-        </span>
-      </label>
+        <p className="ob-help">
+          The name customers will see on your website and your Marketplace listing.
+        </p>
+      </div>
 
-      <label style={{ display: 'grid', gap: '0.4rem' }}>
-        <span style={{ fontWeight: 600 }}>Describe it in one line</span>
+      <div className="ob-field">
+        <label className="ob-label" htmlFor="tagline">
+          Describe it in one line
+        </label>
         <input
+          id="tagline"
           name="tagline"
+          className="ob-input"
           maxLength={200}
           placeholder="e.g. Small-batch roastery and neighbourhood café"
-          style={{
-            padding: '0.65rem 0.8rem',
-            borderRadius: '8px',
-            border: '1px solid rgba(28,36,48,0.28)',
-            fontSize: '1rem',
-            fontFamily: 'system-ui, sans-serif',
-          }}
         />
-        <span
-          style={{ fontSize: '0.83rem', color: '#4c5967', fontFamily: 'system-ui, sans-serif' }}
-        >
-          Shown on your website and marketplace listing. You need this before customers can
-          find you in the marketplace.
-        </span>
-      </label>
+        <p className="ob-help">
+          This becomes the line under your name, on your site and in the Marketplace.
+        </p>
+      </div>
 
-      <label style={{ display: 'grid', gap: '0.4rem' }}>
-        <span style={{ fontWeight: 600 }}>What kind of business is it?</span>
-        <select
-          name="business_type"
-          required
-          defaultValue=""
-          style={{
-            padding: '0.65rem 0.8rem',
-            borderRadius: '8px',
-            border: '1px solid rgba(28,36,48,0.28)',
-            fontSize: '1rem',
-            fontFamily: 'system-ui, sans-serif',
-            background: '#fff',
-          }}
-        >
-          <option value="" disabled>
-            Choose one…
-          </option>
-          {types.map((t) => (
-            <option key={t.type_id} value={t.type_id}>
-              {t.display_name}
-            </option>
-          ))}
-        </select>
-        <span
-          style={{ fontSize: '0.83rem', color: '#4c5967', fontFamily: 'system-ui, sans-serif' }}
-        >
-          This decides which tools we recommend next. You can change it later.
-        </span>
-      </label>
+      <div className="ob-field">
+        <label className="ob-label" htmlFor="description">
+          Tell us a bit more
+        </label>
+        <textarea
+          id="description"
+          name="description"
+          className="ob-textarea"
+          maxLength={2000}
+          placeholder="What you do, what makes it yours, who comes to you. Two or three sentences is plenty."
+        />
+        <p className="ob-help">
+          This is what LOCAH writes your website from — the more real detail you give, the less
+          you will have to edit afterwards.
+        </p>
+      </div>
 
       <SubmitButton />
     </form>
