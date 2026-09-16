@@ -43,8 +43,8 @@ export default async function MarketplacePresencePage({
     <div>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Marketplace Presence</h1>
       <p style={{ maxWidth: '40rem', lineHeight: 1.5 }}>
-        Explicit opt-in for discoverability. Default remains non-discoverable — businesses are never
-        auto-listed (Doc 11 §13.3).
+        Choose whether customers can find you in Marketplace search. You are never listed
+        automatically — this is always your decision, and you can change it at any time.
       </p>
       <dl style={{ marginTop: '1rem', lineHeight: 1.6 }}>
         <dt style={{ fontWeight: 700 }}>Current visibility</dt>

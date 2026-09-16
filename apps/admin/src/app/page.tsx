@@ -26,7 +26,7 @@ const LINKS = [
 export default function AdminHomePage() {
   return (
     <div>
-      <h1 style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>Platform Super Admin</h1>
+      <h1 style={{ fontSize: '2rem', marginBottom: '0.4rem' }}>LOCAH Super Admin</h1>
       <p style={{ opacity: 0.8, maxWidth: '46rem', lineHeight: 1.6 }}>
         Support and observation, never silent impersonation. Every inspection of an identified
         Business is written to the audit trail as an <code>admin.*</code> event attributed to your

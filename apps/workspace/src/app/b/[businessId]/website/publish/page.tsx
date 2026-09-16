@@ -35,11 +35,14 @@ export default async function WebsitePublishPage({
     <div>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Preview & Publish</h1>
       <p style={{ marginBottom: '1rem', maxWidth: '42rem' }}>
-        CORE-007 — preview renders the draft via a short-lived token. Publish copies the draft to
-        a published version after readiness validation. Generation never auto-publishes.
+        Preview gives you a private link to check your site before customers see it. Publishing
+        makes your current draft live. Nothing goes live until you publish.
       </p>
       <p>
-        Current status: <strong>{res.data.data.website.status}</strong>
+        Current status:{' '}
+        <strong>
+          {res.data.data.website.status === 'published' ? 'Published' : 'Draft — not yet live'}
+        </strong>
       </p>
       <ul>
         {res.data.data.draft.pages.map((p) => (

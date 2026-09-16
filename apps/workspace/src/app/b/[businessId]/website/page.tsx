@@ -39,10 +39,18 @@ export default async function WebsiteOverviewPage({
   return (
     <div>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Website Overview</h1>
-      <p style={{ marginBottom: '1rem' }}>CORE-004 — publish status, draft health, recent structure.</p>
+      <p style={{ marginBottom: '1rem' }}>
+        Your website&apos;s publish status, draft content, and page structure.
+      </p>
       <p>
-        Status: <strong>{website.status}</strong>
-        {draft.generated_by ? ` · source: ${draft.generated_by}` : ''}
+        Status: <strong>{website.status === 'published' ? 'Published' : 'Draft'}</strong>
+        {draft.generated_by
+          ? ` · ${
+              draft.generated_by === 'ai_generation'
+                ? 'written by AI from your business details'
+                : 'built from your business details'
+            }`
+          : ''}
       </p>
       <p>Draft pages: {draft.pages.length}</p>
       <ul>

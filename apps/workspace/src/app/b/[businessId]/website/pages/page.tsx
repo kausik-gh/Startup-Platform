@@ -45,7 +45,8 @@ export default async function WebsitePagesPage({
     <div>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Pages & Structured Content</h1>
       <p style={{ marginBottom: '1.25rem', maxWidth: '42rem' }}>
-        CORE-005 — edit platform-defined sections only. No arbitrary HTML or custom section types.
+        Edit the content of each page section. Your site is built from structured sections, so
+        everything stays consistent and mobile-friendly.
       </p>
       {res.data.data.draft.pages.map((page) => (
         <section

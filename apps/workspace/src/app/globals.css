@@ -313,3 +313,84 @@ a .ws-card {
   animation: ws-skeleton 1.2s ease-in-out infinite;
   border-radius: 4px;
 }
+
+/* --------------------------------------------------------------------------
+   Workspace Home — summary and activity
+   Every figure here is computed from records the owner can already see. A stat
+   is rendered only when its module is active AND the role permits reading it,
+   so the dashboard never implies data the viewer has no access to.
+   -------------------------------------------------------------------------- */
+
+.ws-stats {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  margin-bottom: 1.75rem;
+}
+.ws-stat {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.95rem 1.05rem;
+}
+.ws-stat__label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted);
+  margin: 0 0 0.35rem;
+}
+.ws-stat__value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+.ws-stat__note {
+  font-size: 0.78rem;
+  color: var(--color-muted);
+  margin: 0.3rem 0 0;
+}
+
+.ws-activity {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+.ws-activity__row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  text-decoration: none;
+  color: inherit;
+}
+.ws-activity__row:last-child {
+  border-bottom: 0;
+}
+.ws-activity__row:hover {
+  background: var(--color-surface-2);
+}
+.ws-activity__main {
+  min-width: 0;
+  flex: 1;
+}
+.ws-activity__title {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ws-activity__meta {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+.ws-activity__amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}

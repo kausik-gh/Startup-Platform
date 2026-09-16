@@ -2,8 +2,8 @@ import React from 'react'
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Platform Admin',
-  description: 'Multi-tenant Platform Super Admin dashboard',
+  title: 'LOCAH Admin',
+  description: 'LOCAH Super Admin dashboard',
 }
 
 const NAV = [

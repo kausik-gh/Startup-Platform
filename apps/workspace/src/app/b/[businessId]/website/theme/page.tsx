@@ -38,7 +38,7 @@ export default async function WebsiteThemePage({
     <div>
       <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Theme, Navigation & Branding</h1>
       <p style={{ marginBottom: '1rem' }}>
-        CORE-006 — structured theme JSON and navigation links (no custom CSS injection).
+        Set your colours and choose which pages appear in your website navigation.
       </p>
       <form action={saveThemeNav} style={{ maxWidth: '36rem', display: 'grid', gap: '0.75rem' }}>
         <input type="hidden" name="businessId" value={params.businessId} />

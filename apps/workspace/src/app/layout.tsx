@@ -3,7 +3,7 @@ import './globals.css'
 import { generalSans } from './fonts/general-sans'
 
 export const metadata = {
-  title: 'Business Workspace',
+  title: 'LOCAH Workspace',
   description: 'Multi-tenant Platform Business Operating Surface',
 }
 

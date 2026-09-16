@@ -29,6 +29,24 @@ type HomeCard = {
   urgent?: boolean
 }
 
+/** Module ids are developer identifiers; owners must never see them. */
+const MODULE_NAMES: Record<string, string> = {
+  orders: 'Orders',
+  bookings: 'Bookings',
+  leads: 'Leads',
+  inventory: 'Inventory',
+  payments: 'Payments',
+  memberships: 'Memberships',
+  'customer-relationships': 'Customers',
+  'offerings-catalog': 'Offerings',
+  workforce: 'Workforce',
+  fulfilment: 'Fulfilment',
+}
+
+function moduleName(id: string): string {
+  return MODULE_NAMES[id] || id.replace(/-/g, ' ')
+}
+
 const OPERATIONAL_MODULES = [
   'orders',
   'bookings',
@@ -45,6 +63,61 @@ const OPERATIONAL_MODULES = [
 function isOperational(states: Record<string, string>, moduleId: string): boolean {
   const state = states[moduleId]
   return state === 'active' || state === 'ready'
+}
+
+type OrderRow = {
+  id: string
+  order_number: string
+  status: string
+  payment_status: string
+  currency: string
+  total_amount: number
+  created_at: string
+}
+
+type BookingRow = {
+  id: string
+  booking_number: string
+  status: string
+  title?: string | null
+  starts_at: string
+  created_at?: string
+}
+
+const DAY = 24 * 60 * 60 * 1000
+
+function money(amount: number, currency: string) {
+  try {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: currency || 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount)
+  } catch {
+    return `${currency} ${Math.round(amount)}`
+  }
+}
+
+/** "3 hours ago" / "in 2 days" — relative time without pulling in a library. */
+function when(iso: string): string {
+  const then = new Date(iso).getTime()
+  if (Number.isNaN(then)) return ''
+  const diff = then - Date.now()
+  const abs = Math.abs(diff)
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+  if (abs < 60 * 60 * 1000) return rtf.format(Math.round(diff / (60 * 1000)), 'minute')
+  if (abs < DAY) return rtf.format(Math.round(diff / (60 * 60 * 1000)), 'hour')
+  return rtf.format(Math.round(diff / DAY), 'day')
+}
+
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="ws-stat">
+      <p className="ws-stat__label">{label}</p>
+      <p className="ws-stat__value">{value}</p>
+      {note ? <p className="ws-stat__note">{note}</p> : null}
+    </div>
+  )
 }
 
 /**
@@ -116,7 +189,20 @@ export default async function WorkspaceHomePage({
     inventory: active('inventory') && can('inventory.read'),
   }
 
-  const [ordersR, bookingsR, leadsR, inventoryR, notifR, websiteR] = await Promise.all([
+  const wantsCustomers =
+    active('customer-relationships') && can('customers.read')
+
+  const [
+    ordersR,
+    bookingsR,
+    leadsR,
+    inventoryR,
+    notifR,
+    websiteR,
+    allOrdersR,
+    allBookingsR,
+    customersR,
+  ] = await Promise.all([
     wants.orders ? apiTry<{ data: unknown[] }>(`${bp}/orders?status=pending`, token) : null,
     wants.bookings ? apiTry<{ data: unknown[] }>(`${bp}/bookings?status=pending`, token) : null,
     wants.leads ? apiTry<{ data: unknown[] }>(`${bp}/leads?status=new`, token) : null,
@@ -128,6 +214,12 @@ export default async function WorkspaceHomePage({
       `/v1/b/${params.businessId}/website`,
       token
     ),
+    // Unfiltered lists back the summary strip and the activity feed. There is
+    // no aggregate endpoint, so the totals are computed here from the same
+    // records the Orders and Bookings pages show.
+    wants.orders ? apiTry<{ data: OrderRow[] }>(`${bp}/orders`, token) : null,
+    wants.bookings ? apiTry<{ data: BookingRow[] }>(`${bp}/bookings`, token) : null,
+    wantsCustomers ? apiTry<{ data: unknown[] }>(`${bp}/customers`, token) : null,
   ])
 
   if (wants.orders) {
@@ -284,6 +376,70 @@ export default async function WorkspaceHomePage({
   // STATE 3 — Active / STATE 4 — Quiet
   const quiet = pendingWork === 0 && cards.every((card) => !card.urgent)
 
+  // ---- Summary strip -----------------------------------------------------
+  const allOrders: OrderRow[] = allOrdersR?.ok ? allOrdersR.data.data || [] : []
+  const allBookings: BookingRow[] = allBookingsR?.ok ? allBookingsR.data.data || [] : []
+  const customerCount = customersR?.ok ? (customersR.data.data || []).length : null
+
+  const since = Date.now() - 7 * DAY
+  const recentOrders = allOrders.filter(
+    (o) => new Date(o.created_at).getTime() >= since && o.status !== 'cancelled'
+  )
+  const currency = allOrders[0]?.currency || 'INR'
+  const revenue7d = recentOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0)
+  const upcoming = allBookings
+    .filter((b) => new Date(b.starts_at).getTime() >= Date.now() && b.status !== 'cancelled')
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+
+  const stats: Array<{ label: string; value: string; note?: string }> = []
+  if (wants.orders) {
+    stats.push({
+      label: 'Revenue · 7 days',
+      value: money(revenue7d, currency),
+      note: `${recentOrders.length} order${recentOrders.length === 1 ? '' : 's'}`,
+    })
+  }
+  if (wants.bookings) {
+    stats.push({
+      label: 'Upcoming bookings',
+      value: String(upcoming.length),
+      note: upcoming[0] ? `Next ${when(upcoming[0].starts_at)}` : 'Nothing booked yet',
+    })
+  }
+  if (wantsCustomers && customerCount !== null) {
+    stats.push({ label: 'Customers', value: String(customerCount), note: 'All time' })
+  }
+
+  // ---- Recent activity ---------------------------------------------------
+  type Activity = {
+    key: string
+    href: string
+    title: string
+    meta: string
+    amount?: string
+    at: number
+  }
+  const activity: Activity[] = [
+    ...allOrders.map((o) => ({
+      key: `o-${o.id}`,
+      href: `${base}/orders/${o.id}`,
+      title: `Order ${o.order_number}`,
+      meta: `${o.status.replace(/_/g, ' ')} · ${when(o.created_at)}`,
+      amount: money(Number(o.total_amount) || 0, o.currency),
+      at: new Date(o.created_at).getTime(),
+    })),
+    ...allBookings.map((b) => ({
+      key: `b-${b.id}`,
+      href: `${base}/bookings/${b.id}`,
+      title: b.title || `Booking ${b.booking_number}`,
+      meta: `${b.status.replace(/_/g, ' ')} · starts ${when(b.starts_at)}`,
+      at: new Date(b.created_at || b.starts_at).getTime(),
+    })),
+  ]
+    .filter((a) => !Number.isNaN(a.at))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 6)
+
   return (
     <div>
       <PageHeader
@@ -297,6 +453,14 @@ export default async function WorkspaceHomePage({
 
       {locationNotice}
       {restrictedNotice}
+
+      {stats.length > 0 ? (
+        <div className="ws-stats">
+          {stats.map((s) => (
+            <Stat key={s.label} label={s.label} value={s.value} note={s.note} />
+          ))}
+        </div>
+      ) : null}
 
       {cards.length > 0 ? (
         <div
@@ -329,6 +493,24 @@ export default async function WorkspaceHomePage({
         </div>
       ) : null}
 
+      {activity.length > 0 ? (
+        <section style={{ marginTop: '1.75rem' }}>
+          <h2 style={{ fontSize: '1rem', marginBottom: '0.6rem' }}>Latest activity</h2>
+          <div className="ws-activity">
+            {activity.map((a) => (
+              <Link key={a.key} href={a.href} className="ws-activity__row">
+                <span className="ws-activity__main">
+                  <span className="ws-activity__title">{a.title}</span>
+                  <br />
+                  <span className="ws-activity__meta">{a.meta}</span>
+                </span>
+                {a.amount ? <span className="ws-activity__amount">{a.amount}</span> : null}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {quiet && cards.length > 0 ? (
         <p style={{ marginTop: '1.5rem', color: 'var(--color-muted)', maxWidth: '40rem' }}>
           Everything is up to date. This is a good time to look at what is not urgent — your website,
@@ -350,7 +532,7 @@ export default async function WorkspaceHomePage({
         <Card style={{ marginTop: '1.5rem', maxWidth: '40rem' }}>
           <h2 style={{ fontSize: '1rem', marginBottom: '0.25rem' }}>Included in your plan, not turned on</h2>
           <p style={{ color: 'var(--color-muted)' }}>
-            {entitledButOff.slice(0, 4).join(', ')}
+            {entitledButOff.slice(0, 4).map(moduleName).join(', ')}
             {entitledButOff.length > 4 ? `, and ${entitledButOff.length - 4} more` : ''}.
           </p>
           <Link href={`${base}/modules`} className="btn btn-ghost" style={{ marginTop: '0.7rem' }}>
