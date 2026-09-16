@@ -68,6 +68,17 @@ def _setup_commerce(client: TestClient, headers: dict[str, str]) -> dict[str, An
         headers=headers,
     ).json()["data"]["business"]
     bid = business["id"]
+    # A fresh Business defaults to visibility="private" (no public URL) —
+    # promote to "unlisted" so the public checkout endpoints below can
+    # actually resolve it.
+    assert (
+        client.post(
+            f"/v1/b/{bid}/marketplace/visibility",
+            json={"visibility": "unlisted"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
     for mid in ("offerings-catalog", "orders", "inventory", "payments", "fulfilment"):
         assert client.post(f"/v1/b/{bid}/modules/{mid}/enable", headers=headers).status_code == 200
     client.patch(

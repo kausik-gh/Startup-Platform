@@ -70,7 +70,18 @@ def _create_business(client: TestClient, headers: dict[str, str]) -> dict[str, A
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
-    return cast(dict[str, Any], resp.json()["data"]["business"])
+    business = cast(dict[str, Any], resp.json()["data"]["business"])
+    # A fresh Business defaults to visibility="private" (no public URL) —
+    # promote to "unlisted" so public checkout endpoints can resolve it.
+    assert (
+        client.post(
+            f"/v1/b/{business['id']}/marketplace/visibility",
+            json={"visibility": "unlisted"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    return business
 
 
 def _enable_modules(client: TestClient, headers: dict[str, str], business_id: str) -> None:
@@ -83,9 +94,9 @@ def _enable_modules(client: TestClient, headers: dict[str, str], business_id: st
 
 
 def _primary_location(client: TestClient, headers: dict[str, str], business_id: str) -> str:
-    locs = client.get(
-        f"/v1/platform/businesses/{business_id}/locations", headers=headers
-    ).json()["data"]
+    locs = client.get(f"/v1/platform/businesses/{business_id}/locations", headers=headers).json()[
+        "data"
+    ]
     return cast(str, next(loc["id"] for loc in locs if loc["is_primary"]))
 
 
@@ -168,22 +179,30 @@ def test_zone_charge_and_status_machine(owner: tuple[dict[str, str], uuid.UUID])
         factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory() as session:
             outbox = (
-                await session.execute(
-                    select(PlatformOutboxEvent).where(
-                        PlatformOutboxEvent.business_id == uuid.UUID(bid),
-                        PlatformOutboxEvent.event_type == "fulfilment.delivered",
+                (
+                    await session.execute(
+                        select(PlatformOutboxEvent).where(
+                            PlatformOutboxEvent.business_id == uuid.UUID(bid),
+                            PlatformOutboxEvent.event_type == "fulfilment.delivered",
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             assert outbox is not None
             audit = (
-                await session.execute(
-                    select(PlatformAuditEvent).where(
-                        PlatformAuditEvent.business_id == uuid.UUID(bid),
-                        PlatformAuditEvent.event_type == "fulfilment.status_changed",
+                (
+                    await session.execute(
+                        select(PlatformAuditEvent).where(
+                            PlatformAuditEvent.business_id == uuid.UUID(bid),
+                            PlatformAuditEvent.event_type == "fulfilment.status_changed",
+                        )
                     )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             assert audit is not None
         await engine.dispose()
 

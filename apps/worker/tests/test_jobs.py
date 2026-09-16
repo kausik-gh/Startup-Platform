@@ -81,15 +81,45 @@ async def _job_status(session: AsyncSession, job_id: uuid.UUID) -> tuple[str, in
     return str(row.status), int(row.attempt_count), row.last_error
 
 
+async def _drain_backlog(session: AsyncSession, worker_id: str, max_polls: int = 25) -> None:
+    """Clear any pending/due-retry jobs left by earlier runs before a test that
+    asserts on `poll_and_execute_jobs`'s exact return count or relies on a
+    single poll claiming precisely the job it just inserted.
+
+    `claim_job_batch` claims the oldest-due `LIMIT 10` jobs from the shared
+    `platform_async_jobs` table system-wide (correct production behaviour —
+    a worker lane has no notion of "this test's jobs"). This dev/test
+    database is shared and durable across runs, not a throwaway per-run
+    instance, so a bounded batch size means a backlog of old rows (stale
+    retries whose backoff has since elapsed, or jobs from a run that never
+    got to poll them) can crowd out — or simply get counted alongside — the
+    row a given test cares about. Draining first (bounded iterations, not a
+    destructive TRUNCATE, so it stays correct even if tests run in parallel
+    against the same database — it only ever consumes what is genuinely due)
+    makes each test's own single poll deterministic without changing what it
+    asserts.
+    """
+    for _ in range(max_polls):
+        processed = await poll_and_execute_jobs(session, worker_id)
+        if processed == 0:
+            return
+
+
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 async def test_async_job_claim_and_completion(db_session: AsyncSession) -> None:
     job_id = await _insert_async_job(db_session, job_type="platform.noop", payload={"ok": True})
 
-    count = await poll_and_execute_jobs(db_session, "test-job-worker")
-    assert count >= 1
-
-    status, attempt_count, last_error = await _job_status(db_session, job_id)
+    # A single poll's batch (LIMIT 10, oldest-due first) can be entirely
+    # consumed by backlog left over from earlier runs against this shared
+    # database before it ever reaches this job — see _drain_backlog. Poll
+    # until this specific job clears rather than assuming one pass suffices.
+    status = "pending"
+    for _ in range(25):
+        count = await poll_and_execute_jobs(db_session, "test-job-worker")
+        status, attempt_count, last_error = await _job_status(db_session, job_id)
+        if status == "completed" or count == 0:
+            break
     assert status == "completed"
     assert attempt_count == 0
     assert last_error is None
@@ -107,6 +137,12 @@ async def test_async_job_claim_and_completion(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 async def test_async_job_retry_on_failure(db_session: AsyncSession) -> None:
+    # This test asserts poll_and_execute_jobs's exact return count for a
+    # single poll, which also counts any unrelated backlog job the same
+    # batch happens to complete successfully — drain it first (see
+    # _drain_backlog) so the one poll below reflects only this job.
+    await _drain_backlog(db_session, "test-job-retry-drain")
+
     job_id = await _insert_async_job(
         db_session,
         job_type="platform.noop",
@@ -146,6 +182,11 @@ async def test_async_job_retry_on_failure(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 async def test_async_job_dead_letter_on_max_attempts(db_session: AsyncSession) -> None:
+    # Same backlog concern as test_async_job_retry_on_failure — this job's own
+    # dead-letter row is self-contained regardless of backlog, but draining
+    # first keeps the single poll below deterministic.
+    await _drain_backlog(db_session, "test-job-dlq-drain")
+
     job_id = await _insert_async_job(
         db_session,
         job_type="platform.noop",
@@ -179,6 +220,15 @@ async def test_async_job_dead_letter_on_max_attempts(db_session: AsyncSession) -
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 async def test_scheduled_job_materialization(db_session: AsyncSession) -> None:
+    # Same shared-database backlog concern as _drain_backlog above, for the
+    # scheduled-jobs lane: drain any already-due schedules from earlier runs
+    # first so the "materializing again must not duplicate" assertion below
+    # (`again == 0`) reflects only this test's own schedule.
+    for _ in range(25):
+        if await materialize_due_schedules(db_session, "test-scheduler-drain") == 0:
+            break
+    await _drain_backlog(db_session, "test-scheduler-drain-jobs")
+
     schedule_id = uuid.uuid4()
     await db_session.execute(
         text("""
@@ -230,16 +280,25 @@ async def test_scheduled_job_materialization(db_session: AsyncSession) -> None:
     again = await materialize_due_schedules(db_session, "test-scheduler")
     assert again == 0
 
-    # Execute the materialized job
-    executed = await poll_and_execute_jobs(db_session, "test-scheduler-exec")
-    assert executed >= 1
-    status, _, _ = await _job_status(db_session, srow.materialized_job_id)
+    # Execute the materialized job. Same backlog concern as
+    # test_async_job_claim_and_completion — poll until this specific job
+    # clears rather than assuming the first batch reaches it.
+    status = "pending"
+    for _ in range(25):
+        count = await poll_and_execute_jobs(db_session, "test-scheduler-exec")
+        status, _, _ = await _job_status(db_session, srow.materialized_job_id)
+        if status == "completed" or count == 0:
+            break
     assert status == "completed"
 
 
 @pytest.mark.asyncio
 @pytest.mark.skipif(not os.getenv("DATABASE_URL"), reason="DATABASE_URL required")
 async def test_concurrent_job_claim_safety(db_session: AsyncSession) -> None:
+    # Drain backlog first (see _drain_backlog) so this job is guaranteed a
+    # slot in the LIMIT-10 batch each concurrent claim below draws from.
+    await _drain_backlog(db_session, "test-concurrent-drain")
+
     job_id = await _insert_async_job(db_session, job_type="platform.noop")
 
     url = get_database_url()

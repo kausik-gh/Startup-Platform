@@ -70,6 +70,17 @@ def _place_pickup(client: TestClient, headers: dict[str, str]) -> dict[str, Any]
         headers=headers,
     ).json()["data"]["business"]
     bid = business["id"]
+    # A fresh Business defaults to visibility="private" (no public URL) —
+    # promote to "unlisted" so the public checkout/tracking endpoints below
+    # can actually resolve it.
+    assert (
+        client.post(
+            f"/v1/b/{bid}/marketplace/visibility",
+            json={"visibility": "unlisted"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
     for mid in ("offerings-catalog", "orders", "inventory", "payments", "fulfilment"):
         client.post(f"/v1/b/{bid}/modules/{mid}/enable", headers=headers)
     client.patch(

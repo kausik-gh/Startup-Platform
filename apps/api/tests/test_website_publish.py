@@ -72,7 +72,18 @@ def _create_business(client: TestClient, headers: dict[str, str]) -> dict[str, A
         headers=headers,
     )
     assert resp.status_code == 200, resp.text
-    return cast(dict[str, Any], resp.json()["data"]["business"])
+    business = cast(dict[str, Any], resp.json()["data"]["business"])
+    # A fresh Business defaults to visibility="private" (no public URL) —
+    # promote to "unlisted" so public website endpoints can resolve it.
+    assert (
+        client.post(
+            f"/v1/b/{business['id']}/marketplace/visibility",
+            json={"visibility": "unlisted"},
+            headers=headers,
+        ).status_code
+        == 200
+    )
+    return business
 
 
 def _drain_generation(business_id: str) -> None:
